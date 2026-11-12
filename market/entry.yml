@@ -1,0 +1,9 @@
+# 提交到 awesome-dsh-plugin registry 的条目模板。
+# 文件名规则：data/plugins/<owner>__<repo>.yml —— 把 OWNER 换成你的 GitHub 用户名/组织名。
+url: https://github.com/OWNER/dsh-node-monitor
+name: OWNER/dsh-node-monitor
+category: remote
+description:
+  en: 'Multi-node DSH monitor and control hub: status, read-only sessions, one-click/embedded real DSH UI, plugin toggles and restart (dry-run + audit), filters and batch operations.'
+  zh: '多 DSH 节点监控与集中管控：状态总览、只读会话、一键/内嵌打开真实 DSH、插件启停与重启（dry-run + 审计）、筛选与批量操作。'
+icon: https://raw.githubusercontent.com/OWNER/dsh-node-monitor/main/icon.svg

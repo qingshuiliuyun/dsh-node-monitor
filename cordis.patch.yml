@@ -1,0 +1,7 @@
+# dsh-node-monitor 的宿主插件行。
+# 由 dsh-npm 风格的 bundle 安装流程写入 profile 的 cordis.patch.yml，
+# 不要手工合并到正在运行的 profile。
+- insert:
+    - id: node-monitor
+      name: 'dsh-node-monitor'
+      config: {}

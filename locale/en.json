@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DSH Node Monitor",
+    "description": "Pinned sidebar entry for the online status, tasks, metrics, logs and alerts of every DSH node."
+  },
+  "panel": "Nodes"
+}

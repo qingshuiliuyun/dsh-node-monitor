@@ -1,0 +1,44 @@
+{
+  "name": "dsh-node-monitor",
+  "version": "0.3.1",
+  "private": true,
+  "type": "module",
+  "description": "多 DSH 节点监控与多机集中管控 Hub：状态总览、只读会话、一键/内嵌打开真实 DSH、插件启停与重启（dry-run + 审计）",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json",
+    "./locale/*": "./locale/*",
+    "./icon": "./icon.svg"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "platform": "web"
+    }
+  },
+  "files": [
+    "lib",
+    "locale",
+    "icon.svg",
+    "cordis.patch.yml",
+    "README.md",
+    "DESIGN.md",
+    "docs"
+  ],
+  "scripts": {
+    "test": "node --test --test-force-exit test/core.test.js test/host.test.js"
+  }
+}
