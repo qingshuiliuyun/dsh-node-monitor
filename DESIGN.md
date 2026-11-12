@@ -1,6 +1,6 @@
 # dsh-node-monitor 设计文档
 
-> 适用版本：**v0.6.5**（2026-11-12）。本文是架构与协议规格；安装步骤见 [docs/INSTALL.md](docs/INSTALL.md)，安全细节见 [docs/SECURITY.md](docs/SECURITY.md)，关键取舍见 [docs/ARCHITECTURE-DECISIONS.md](docs/ARCHITECTURE-DECISIONS.md)，版本历史见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
+> 适用版本：**v0.6.6**（2026-11-12）。本文是架构与协议规格；安装步骤见 [docs/INSTALL.md](docs/INSTALL.md)，安全细节见 [docs/SECURITY.md](docs/SECURITY.md)，关键取舍见 [docs/ARCHITECTURE-DECISIONS.md](docs/ARCHITECTURE-DECISIONS.md)，版本历史见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 1. 目标与非目标
 
@@ -37,7 +37,7 @@
 
 假设：
 
-1. 目标 DSH 版本支持本插件（v0.6.4 宿主半）；不同版本用 `PROTOCOL=dsh.node-monitor/1` 校验，不匹配只告警。
+1. 目标 DSH 版本支持本插件（v0.6.6 宿主半）；不同版本用 `PROTOCOL=dsh.node-monitor/1` 校验，不匹配只告警。
 2. 跨节点访问走 agent 端口 45873（插件自己的 HTTP），不依赖 DSH 的 `--host`/登录态。
 3. 打开远端 DSH 界面需要其启动登录地址，插件无法自行获取，由用户一次性粘贴。
 4. 跨 NAT 的两个节点若都没有公网入口，必须借助第三点（Hub、虚拟局域网或隧道）；纯 P2P 不做。
@@ -61,6 +61,7 @@
 | v0.6.3 | 安全审计 | 只读令牌分权、命令过期、peer 上限、超时与日志轮转 |
 | v0.6.4 | 文档与修复 | 全套文档重写；`remoteId` 持久化，重启后 Hub/直连去重仍有效 |
 | v0.6.5 | 文档补充 | 架构决策记录（ADR）与英文 README |
+| v0.6.6 | 健壮性修复 | 自动配对限流、Hub 结果绑定、publicUrl/链接校验、SVG 白名单、计数与队列清理 |
 
 ## 4. 总体架构
 
@@ -185,7 +186,7 @@ Hub:      按 commandId resolve，RPC 返回结果
 端口 45871，组播 `239.255.43.21` + 广播 + 单播 peers；30s 一次；TTL 5 分钟；最多 32 条。报文：
 
 ```json
-{"m":"dsh-node-monitor/discovery/1","v":1,"id":"<nodeId>","label":"<显示名>","port":3081,"host":"<主机名>","version":"0.6.5","ap":45873,"path":"/","ts":1699999999999}
+{"m":"dsh-node-monitor/discovery/1","v":1,"id":"<nodeId>","label":"<显示名>","port":3081,"host":"<主机名>","version":"0.6.6","ap":45873,"path":"/","ts":1699999999999}
 ```
 
 接收方必须：校验协议/id/来源为 RFC1918/链路本地/回环、忽略自身 id、按 id 去重并刷新 lastSeen。**报文不含任何令牌。**
@@ -265,10 +266,10 @@ owner（DSH Cookie） ──RPC──▶ 宿主
 
 ## 12. 测试与验收
 
-测试（`npm test`，48/48）：
+测试（`npm test`，50/50）：
 
 - **core 30**：地址/令牌校验、快照清洗与只读快照、探测与错误码、告警计算、发现报文解析/合并、链接编解码、持久化往返。
-- **host 18**：RPC 与 owner 校验、agent 认证/只读/401、pair 双向/去重/公网拒绝、自动配对只读、Hub 上报与命令往返、Hub 投影去重、控制 dry-run/confirm/审计、发现报文注入、加入链接/二维码、exclude 令牌泄露。
+- **host 20**：RPC 与 owner 校验、agent 认证/只读/401、pair 双向/去重/公网拒绝、自动配对只读、Hub 上报与命令往返、Hub 投影去重、Hub 结果必须匹配 nodeId、自动配对限流/自动节点上限/publicUrl 校验、控制 dry-run/confirm/审计、发现报文注入、加入链接/二维码、exclude 令牌泄露。
 
 验收清单：
 

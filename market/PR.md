@@ -34,5 +34,5 @@ Checklist:
 - [x] `dsh.bundle` manifest declared in `package.json`
 - [x] No runtime dependencies (`dependencies` empty)
 - [x] Load safety: `apply()` returns a disposer immediately; 1.5s mount window; PanelBoundary
-- [x] Tests pass (`npm test` → 48/48)
+- [x] Tests pass (`npm test` → 50/50)
 - [x] Icon hosted on GitHub (raw PNG at `assets/icon-180.png`)

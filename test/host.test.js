@@ -1098,3 +1098,104 @@ test('Hub 投影去重：已通过局域网直连的同一台机器不再重复�
     await fsp.rm(home, { recursive: true, force: true })
   }
 })
+
+test('远程主节点：命令结果必须由对应节点回传', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-hub-result-'))
+  const { ctx, routes, cleanups } = fakeContext('http://127.0.0.1:3996')
+  const host = new NodeMonitorHost(ctx, { home, discovery: false })
+  try {
+    await host.start()
+    const handler = routes.get(HUB_RESULT_PATH)
+    assert.equal(typeof handler, 'function')
+    let resolved = null
+    host.hubResults.set('c-test', {
+      nodeId: 'peer-a',
+      resolve(value) {
+        resolved = value
+      },
+      timer: null
+    })
+    const call = async (body) => {
+      const res = mockRes()
+      await handler(
+        {
+          method: 'POST',
+          url: HUB_RESULT_PATH,
+          headers: { authorization: `Bearer ${host.secrets.hubToken}` },
+          socket: { remoteAddress: '10.0.0.30' },
+          on(event, cb) {
+            if (event === 'data') cb(Buffer.from(JSON.stringify(body)))
+            if (event === 'end') cb()
+          },
+          destroy() {}
+        },
+        res
+      )
+      return { status: res.statusCode, payload: res.json() }
+    }
+    const wrong = await call({ commandId: 'c-test', nodeId: 'peer-b', ok: true })
+    assert.equal(wrong.status, 403)
+    assert.equal(resolved, null)
+    const right = await call({ commandId: 'c-test', nodeId: 'peer-a', ok: true, value: { ok: true } })
+    assert.equal(right.status, 200)
+    assert.equal(resolved.ok, true)
+  } finally {
+    await host.dispose()
+    for (const cleanup of cleanups) await cleanup()
+    await fsp.rm(home, { recursive: true, force: true })
+  }
+})
+
+test('自动配对限流、publicUrl 校验与自动节点上限', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-guard-'))
+  const { ctx, cleanups } = fakeContext('http://127.0.0.1:3995')
+  const host = new NodeMonitorHost(ctx, { home, discovery: false, publicUrl: 'javascript:alert(1)' })
+  try {
+    assert.equal(host.publicUrl, '')
+    const bad = new NodeMonitorHost(ctx, { home, discovery: false, publicUrl: 'ftp://example.com' })
+    assert.equal(bad.publicUrl, '')
+    const good = new NodeMonitorHost(ctx, { home, discovery: false, publicUrl: 'https://hub.example.com/' })
+    assert.equal(good.publicUrl, 'https://hub.example.com')
+
+    for (let i = 0; i < 12; i += 1) assert.equal(host.autoPairAllowed('10.9.9.9'), true)
+    assert.equal(host.autoPairAllowed('10.9.9.9'), false)
+    assert.equal(host.autoPairAllowed('10.9.9.10'), true)
+
+    for (let i = 0; i < 16; i += 1) {
+      host.nodes.push({
+        id: `auto-${i}`,
+        name: `auto-${i}`,
+        baseUrl: `http://10.0.0.${i + 1}:45873`,
+        adapter: 'dsh',
+        tags: ['paired', 'auto'],
+        enabled: true,
+        network: 'lan',
+        notes: '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      })
+    }
+    host.autoPair = true
+    const res = mockRes()
+    await host.handlePairRequest(
+      {
+        method: 'POST',
+        url: PAIR_PATH,
+        headers: {},
+        socket: { remoteAddress: '10.9.9.11' },
+        on(event, cb) {
+          if (event === 'data') cb(Buffer.from(JSON.stringify({ auto: true, id: 'peer-x', port: 3090, agentPort: 45873, token: '0123456789abcdef' })))
+          if (event === 'end') cb()
+        },
+        destroy() {}
+      },
+      res
+    )
+    assert.equal(res.statusCode, 409)
+    assert.equal(res.json().error, 'auto-pair-limit')
+  } finally {
+    await host.dispose()
+    for (const cleanup of cleanups) await cleanup()
+    await fsp.rm(home, { recursive: true, force: true })
+  }
+})

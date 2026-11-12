@@ -12,9 +12,9 @@
 - 运维控制默认关闭；只读令牌、dry-run、二次确认、审计日志、限流
 
 仓库：<https://github.com/qingshuiliuyun/dsh-node-monitor>  
-当前版本：**v0.6.5**（2026-11-12）  
-测试：`npm test` → **48/48**（30 单测 + 18 集成）  
-安装包：`dsh-node-monitor-dist/dsh-node-monitor-0.6.5.zip` / `.tgz` 或 GitHub tag `v0.6.4`
+当前版本：**v0.6.6**（2026-11-12）  
+测试：`npm test` → **50/50**（30 单测 + 20 集成）  
+安装包：`dsh-node-monitor-dist/dsh-node-monitor-0.6.6.zip` / `.tgz` 或 GitHub tag `v0.6.4`
 
 ---
 
@@ -73,14 +73,14 @@
 DSH →「插件」→「添加插件」→ 粘贴以下任一地址 → 安装 → **重启 DSH**：
 
 ```
-https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.5
+https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.6
 ```
 
 也支持直接填 GitHub 仓库地址 `https://github.com/qingshuiliuyun/dsh-node-monitor`（会拉默认分支）。
 
 ### 方式 B：本地目录（离线包）
 
-解压 `dsh-node-monitor-0.6.5.zip`，在「添加插件」里填解压后的目录绝对路径，或在 profile 里用：
+解压 `dsh-node-monitor-0.6.6.zip`，在「添加插件」里填解压后的目录绝对路径，或在 profile 里用：
 
 ```
 dsh plugin add /绝对路径/dsh-node-monitor
@@ -125,7 +125,7 @@ dsh plugin add /绝对路径/dsh-node-monitor
 
 ### 3. 没有服务器：接入码 + 虚拟局域网 / IPv6
 
-1. 两台都装 v0.6.5 并重启。
+1. 两台都装 v0.6.6 并重启。
 2. A：「本机配对信息」→「接入码」→ 选一个本机地址（局域网 IP / Tailscale 100.x / IPv6）。
 3. 复制接入链接（或让对方扫二维码）。
 4. B：「添加节点」→ 把链接粘贴到**节点地址**输入框 → 地址和令牌自动填好 → 保存。
@@ -243,7 +243,7 @@ UDP 发现：45871，组播 `239.255.43.21`，30s 一次，TTL 5 分钟，字段
 ## 开发与测试
 
 ```bash
-npm test                 # 48/48
+npm test                 # 50/50
 node --test --test-force-exit test/core.test.js
 node --test --test-force-exit test/host.test.js
 ```

@@ -1,4 +1,4 @@
-# 安装与部署（v0.6.5）
+# 安装与部署（v0.6.6）
 
 本文只讲「怎么装、怎么连、怎么排障」。架构与协议见 [../DESIGN.md](../DESIGN.md)，安全模型见 [SECURITY.md](SECURITY.md)。
 
@@ -18,7 +18,7 @@
 3. 粘贴以下地址之一：
 
    ```
-   https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.5
+   https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.6
    ```
 
    或仓库地址：
@@ -32,7 +32,7 @@
 
 ### 方式 B：离线包
 
-1. 解压 `dsh-node-monitor-0.6.5.zip`（顶层目录 `dsh-node-monitor/`）。
+1. 解压 `dsh-node-monitor-0.6.6.zip`（顶层目录 `dsh-node-monitor/`）。
 2. 「添加插件」里填解压后的**绝对路径**；或命令行：
 
    ```bash
@@ -70,7 +70,7 @@ ls -l  ~/.dsh/node-monitor
 期望：
 
 ```json
-{"ok":true,"name":"dsh-node-monitor","protocol":"dsh.node-monitor/1","version":"0.6.5"}
+{"ok":true,"name":"dsh-node-monitor","protocol":"dsh.node-monitor/1","version":"0.6.6"}
 ```
 
 ## 3. 四种部署场景
@@ -104,7 +104,7 @@ ls -l  ~/.dsh/node-monitor
 
 ### 3.3 没有服务器：接入码 + 虚拟局域网 / IPv6
 
-1. 两台安装 v0.6.5 并重启。
+1. 两台安装 v0.6.6 并重启。
 2. A：「本机配对信息」→「接入码」→ 选地址（LAN/Tailscale 100.x/IPv6）→ 复制链接/二维码。
 3. B：「添加节点」→ 粘贴到**节点地址**栏 → 自动填地址和令牌 → 保存。
 4. 自测：
