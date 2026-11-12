@@ -85,7 +85,9 @@ test('validateNodeInput 校验名称、适配器、generic 路径并清洗标签
   assert.equal(good.value.enabled, false)
   assert.equal(good.value.token, 'secret')
 
-  assert.equal(validateNodeInput({ baseUrl: 'https://x.test' }).ok, false)
+  // 名称可选：留空由宿主探测补全；只校验地址/适配器。
+  assert.equal(validateNodeInput({ baseUrl: 'https://x.test' }).ok, true)
+  assert.equal(validateNodeInput({ name: '', baseUrl: 'ftp://x.test' }).ok, false)
   assert.equal(validateNodeInput({ name: 'x', baseUrl: 'https://x.test', adapter: 'nope' }).ok, false)
   assert.equal(validateNodeInput({ name: 'x', baseUrl: 'https://x.test', adapter: 'generic', path: 'health' }).ok, false)
   assert.equal(validateNodeInput({ name: 'x', baseUrl: 'https://x.test', adapter: 'generic', path: '/a b' }).ok, false)

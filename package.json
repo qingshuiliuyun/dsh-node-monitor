@@ -1,9 +1,9 @@
 {
   "name": "dsh-node-monitor",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "type": "module",
-  "description": "多 DSH 节点监控与多机集中管控 Hub：状态总览、只读会话、一键/内嵌打开真实 DSH、插件启停与重启（dry-run + 审计）、局域网自动发现与令牌配对",
+  "description": "多 DSH 节点监控与多机集中管控 Hub：状态总览、只读会话、一键/内嵌打开真实 DSH、双向配对、局域网自动发现与令牌配对、插件启停与重启（dry-run + 审计）",
   "license": "MIT",
   "engines": {
     "node": ">=20"

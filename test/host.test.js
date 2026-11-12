@@ -2,11 +2,12 @@ process.env.DSH_NODE_MONITOR_DISCOVERY = '0'
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import http from 'node:http'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { NodeMonitorHost, apply } from '../lib/index.js'
-import { AGENT_HEALTH_PATH, AGENT_STATUS_PATH, CONTROL_PATH, OPEN_PATH, PROTOCOL, RPC_CHANNEL, buildAnnouncement } from '../lib/core.js'
+import { AGENT_HEALTH_PATH, AGENT_STATUS_PATH, CONTROL_PATH, OPEN_PATH, PAIR_PATH, PROTOCOL, RPC_CHANNEL, buildAnnouncement } from '../lib/core.js'
 
 const owner = { principal: { kind: 'owner' } }
 const browser = { principal: { kind: 'browser' } }
@@ -707,4 +708,122 @@ test('局域网发现：只接收公开身份、来源地址优先、接入后�
 
   for (const cleanup of cleanups) await cleanup()
   await fsp.rm(home, { recursive: true, force: true })
+})
+
+test('双向配对：接收对端登记（Bearer 校验、来源地址限制、自动建节点）', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-pair-'))
+  const { ctx, routes, cleanups } = fakeContext('http://127.0.0.1:3998')
+  const host = new NodeMonitorHost(ctx, { home })
+  try {
+    await host.start()
+    await delay(50)
+    const handler = routes.get(PAIR_PATH)
+    assert.equal(typeof handler, 'function')
+    const token = host.secrets.agentToken
+
+    const makeReq = (payload, { method = 'POST', remote = '::ffff:192.168.1.23', auth = token } = {}) => ({
+      method,
+      socket: { remoteAddress: remote },
+      headers: auth ? { authorization: `Bearer ${auth}` } : {},
+      on(event, callback) {
+        if (event === 'data') callback(Buffer.from(JSON.stringify(payload)))
+        if (event === 'end') callback()
+      }
+    })
+
+    const body = { id: 'peer-1', label: 'PC-1', port: 3101, token: 'p'.repeat(24) }
+    const okRes = mockRes()
+    await handler(makeReq(body), okRes)
+    assert.equal(okRes.statusCode, 200)
+    assert.equal(okRes.json().ok, true)
+    const node = host.nodes.find((item) => item.baseUrl === 'http://192.168.1.23:3101')
+    assert.ok(node)
+    assert.equal(node.name, 'PC-1')
+    assert.deepEqual(node.tags, ['paired'])
+    const state = await host.buildState()
+    const view = state.nodes.find((item) => item.id === node.id)
+    assert.equal(view.hasToken, true)
+    assert.equal(JSON.stringify(state).includes('p'.repeat(24)), false)
+
+    // 重复配对：更新而不是新增
+    const again = mockRes()
+    await handler(makeReq({ ...body, label: '' }), again)
+    assert.equal(again.json().updated, true)
+    assert.equal(host.nodes.filter((item) => item.baseUrl === 'http://192.168.1.23:3101').length, 1)
+
+    // 公网来源被拒
+    const wan = mockRes()
+    await handler(makeReq(body, { remote: '8.8.8.8' }), wan)
+    assert.equal(wan.statusCode, 403)
+
+    // 错误令牌 401，GET 405
+    const bad = mockRes()
+    await handler(makeReq(body, { auth: 'nope' }), bad)
+    assert.equal(bad.statusCode, 401)
+    const wrongMethod = mockRes()
+    await handler({ method: 'GET', socket: { remoteAddress: '127.0.0.1' }, headers: {} }, wrongMethod)
+    assert.equal(wrongMethod.statusCode, 405)
+  } finally {
+    await host.dispose()
+    for (const cleanup of cleanups) await cleanup()
+  }
+})
+
+test('添加节点留空名称时自动取远端 hostname，并把本机登记回对端', async () => {
+  const pairCalls = []
+  const token = 'e2e-agent-token'
+  const server = http.createServer((req, res) => {
+    if (req.url === PAIR_PATH && req.method === 'POST') {
+      let raw = ''
+      req.on('data', (chunk) => (raw += chunk))
+      req.on('end', () => {
+        pairCalls.push({ auth: req.headers.authorization, body: JSON.parse(raw || '{}') })
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end('{"ok":true}')
+      })
+      return
+    }
+    if (req.url !== AGENT_STATUS_PATH || req.headers.authorization !== `Bearer ${token}`) {
+      res.writeHead(401, { 'content-type': 'application/json' })
+      res.end('{"ok":false}')
+      return
+    }
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(
+      JSON.stringify({
+        protocol: PROTOCOL,
+        generatedAt: new Date().toISOString(),
+        host: { hostname: 'win-pc-2', platform: 'win32', arch: 'x64', uptimeSec: 120 },
+        sessions: { total: 1, running: 1, idle: 0 },
+        metrics: { cpuPct: 5, memPct: 30, diskFreePct: 80, load1: 0.1 }
+      })
+    )
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const { port } = server.address()
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-pair2-'))
+  const { ctx, rpc, cleanups } = fakeContext('http://127.0.0.1:3997')
+  const host = new NodeMonitorHost(ctx, { home })
+  try {
+    await host.start()
+    const call = (endpoint, payload = {}) => rpc.get(RPC_CHANNEL)(endpoint, payload, undefined, owner)
+    const added = await call('addNode', {
+      name: '',
+      baseUrl: `http://127.0.0.1:${port}`,
+      adapter: 'dsh',
+      token
+    })
+    assert.equal(added.ok, true)
+    const node = added.value.nodes.find((item) => item.baseUrl === `http://127.0.0.1:${port}`)
+    assert.equal(node.name, 'win-pc-2')
+    await delay(300)
+    assert.equal(pairCalls.length, 1)
+    assert.equal(pairCalls[0].auth, `Bearer ${token}`)
+    assert.equal(pairCalls[0].body.port, 3997)
+    assert.equal(pairCalls[0].body.token, host.secrets.agentToken)
+  } finally {
+    await host.dispose()
+    for (const cleanup of cleanups) await cleanup()
+    await new Promise((resolve) => server.close(resolve))
+  }
 })
