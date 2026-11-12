@@ -36,7 +36,8 @@
     "cordis.patch.yml",
     "README.md",
     "DESIGN.md",
-    "docs"
+    "docs",
+    "assets"
   ],
   "scripts": {
     "test": "node --test --test-force-exit test/core.test.js test/host.test.js"

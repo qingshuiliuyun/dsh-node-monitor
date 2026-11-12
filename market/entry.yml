@@ -1,9 +1,7 @@
-# 提交到 awesome-dsh-plugin registry 的条目模板。
-# 文件名规则：data/plugins/<owner>__<repo>.yml —— 把 qingshuiliuyun 换成你的 GitHub 用户名/组织名。
 url: https://github.com/qingshuiliuyun/dsh-node-monitor
 name: qingshuiliuyun/dsh-node-monitor
 category: remote
 description:
-  en: 'Multi-node DSH monitor and control hub: status, read-only sessions, one-click/embedded real DSH UI, plugin toggles and restart (dry-run + audit), filters and batch operations.'
-  zh: '多 DSH 节点监控与集中管控：状态总览、只读会话、一键/内嵌打开真实 DSH、插件启停与重启（dry-run + 审计）、筛选与批量操作。'
-icon: https://raw.githubusercontent.com/qingshuiliuyun/dsh-node-monitor/main/icon.svg
+  en: 'Multi-node DSH monitor and control hub: per-node status, read-only sessions, one-click or same-site embedded access to a real DSH UI, token-paired LAN auto-discovery, and opt-in plugin toggle/restart behind dry-run, confirmation and a JSONL audit log.'
+  zh: '多 DSH 节点监控与集中管控：逐节点状态、只读会话、一键或同源内嵌打开真实 DSH、令牌配对的局域网自动发现，以及默认关闭的插件启停/重启（干跑、二次确认、JSONL 审计）。'
+icon: https://raw.githubusercontent.com/qingshuiliuyun/dsh-node-monitor/main/assets/icon-180.png
