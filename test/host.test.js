@@ -739,9 +739,11 @@ test('双向配对：接收对端登记（Bearer 校验、来源地址限制、�
     await handler(makeReq(body), okRes)
     assert.equal(okRes.statusCode, 200)
     assert.equal(okRes.json().ok, true)
+    assert.equal(okRes.json().token, host.secrets.agentToken)
     const node = host.nodes.find((item) => item.baseUrl === 'http://192.168.1.23:3101')
     assert.ok(node)
     assert.equal(node.name, 'PC-1')
+    assert.equal(node.remoteId, 'peer-1')
     assert.deepEqual(node.tags, ['paired'])
     const state = await host.buildState()
     const view = state.nodes.find((item) => item.id === node.id)
@@ -963,5 +965,136 @@ test('远程主节点：PC 主动上报、Hub 投影节点、控制指令往返'
     for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
     await fsp.rm(home, { recursive: true, force: true }).catch(() => {})
     throw error
+  }
+})
+
+test('自动配对只交换只读令牌：状态可读但无明细，控制被拒绝', async () => {
+  const previous = process.env.DSH_NODE_MONITOR_AUTO_PAIR
+  delete process.env.DSH_NODE_MONITOR_AUTO_PAIR
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-auto-'))
+  const { ctx, routes, cleanups } = fakeContext('http://127.0.0.1:3993')
+  const host = new NodeMonitorHost(ctx, { home })
+  try {
+    await host.start()
+    await delay(50)
+    assert.equal(host.allowControl, false)
+    assert.equal(typeof host.secrets.statusToken, 'string')
+    assert.ok(host.secrets.statusToken.length >= 16)
+
+    const pairReq = {
+      method: 'POST',
+      socket: { remoteAddress: '::ffff:192.168.1.30' },
+      headers: {},
+      on(event, callback) {
+        if (event === 'data') {
+          callback(
+            Buffer.from(
+              JSON.stringify({ id: 'peer-auto', label: 'PC-AUTO', port: 3102, agentPort: 45873, token: 'r'.repeat(40), auto: true })
+            )
+          )
+        }
+        if (event === 'end') callback()
+      }
+    }
+    const paired = mockRes()
+    await routes.get(PAIR_PATH)(pairReq, paired)
+    assert.equal(paired.statusCode, 200)
+    const payload = paired.json()
+    assert.equal(payload.ok, true)
+    assert.equal(payload.readOnly, true)
+    assert.equal(payload.token, host.secrets.statusToken)
+    assert.notEqual(payload.token, host.secrets.agentToken)
+    const node = host.nodes.find((item) => item.baseUrl === 'http://192.168.1.30:45873')
+    assert.ok(node)
+    assert.deepEqual(node.tags, ['paired', 'auto'])
+
+    const statusReq = {
+      method: 'GET',
+      socket: { remoteAddress: '::ffff:192.168.1.30' },
+      headers: { authorization: `Bearer ${host.secrets.statusToken}` }
+    }
+    const readOnlyRes = mockRes()
+    await routes.get(AGENT_STATUS_PATH)(statusReq, readOnlyRes)
+    assert.equal(readOnlyRes.statusCode, 200)
+    const snapshot = readOnlyRes.json()
+    assert.equal(snapshot.host.hostname, os.hostname())
+    assert.deepEqual(snapshot.sessions.list, [])
+    assert.deepEqual(snapshot.recent, [])
+    assert.equal(snapshot.control.enabled, false)
+
+    const fullRes = mockRes()
+    await routes.get(AGENT_STATUS_PATH)(
+      { ...statusReq, headers: { authorization: `Bearer ${host.secrets.agentToken}` } },
+      fullRes
+    )
+    assert.equal(fullRes.statusCode, 200)
+    assert.ok(Array.isArray(fullRes.json().sessions.list))
+
+    const controlBody = {
+      method: 'POST',
+      socket: { remoteAddress: '::ffff:192.168.1.30' },
+      headers: { authorization: `Bearer ${host.secrets.statusToken}`, 'content-type': 'application/json' },
+      on(event, callback) {
+        if (event === 'data') callback(Buffer.from(JSON.stringify({ action: 'plugins.list' })))
+        if (event === 'end') callback()
+      }
+    }
+    const controlRes = mockRes()
+    await routes.get(CONTROL_PATH)(controlBody, controlRes)
+    assert.equal(controlRes.statusCode, 401)
+  } finally {
+    if (previous === undefined) delete process.env.DSH_NODE_MONITOR_AUTO_PAIR
+    else process.env.DSH_NODE_MONITOR_AUTO_PAIR = previous
+    await host.dispose()
+    for (const cleanup of cleanups) await cleanup()
+    await fsp.rm(home, { recursive: true, force: true })
+  }
+})
+
+test('Hub 投影去重：已通过局域网直连的同一台机器不再重复出现', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-dedupe-'))
+  const { ctx, cleanups } = fakeContext('http://127.0.0.1:3991')
+  const host = new NodeMonitorHost(ctx, { home })
+  try {
+    await host.start()
+    await delay(50)
+    host.nodes = [
+      ...host.nodes,
+      {
+        id: 'n-direct',
+        name: 'PC-1',
+        baseUrl: 'http://192.168.1.23:45873',
+        adapter: 'dsh',
+        path: null,
+        tags: ['paired', 'auto'],
+        enabled: true,
+        network: 'lan',
+        notes: '',
+        remoteId: 'peer-1',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    ]
+    host.hubPeers.set('peer-1', {
+      nodeId: 'peer-1',
+      name: 'PC-1',
+      ip: '192.168.1.23',
+      lastSeen: Date.now(),
+      payload: { protocol: PROTOCOL, host: { hostname: 'pc-1' }, metrics: { cpuPct: 3 } }
+    })
+    host.hubPeers.set('peer-2', {
+      nodeId: 'peer-2',
+      name: 'PC-2',
+      ip: '192.168.1.24',
+      lastSeen: Date.now(),
+      payload: { protocol: PROTOCOL, host: { hostname: 'pc-2' }, metrics: { cpuPct: 4 } }
+    })
+    const state = await host.buildState()
+    assert.equal(state.nodes.some((node) => node.id === 'hub:peer-1'), false)
+    assert.equal(state.nodes.some((node) => node.id === 'hub:peer-2'), true)
+  } finally {
+    await host.dispose()
+    for (const cleanup of cleanups) await cleanup()
+    await fsp.rm(home, { recursive: true, force: true })
   }
 })

@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   AGENT_STATUS_PATH,
+  restrictSnapshot,
   BATCH_OPS,
   DISCOVERY_PROTOCOL,
   DISCOVERY_TTL_MS,
@@ -585,4 +586,20 @@ test('节点接入链接：带 agent 地址与令牌，粘贴即添加', () => {
   assert.equal(v6.value.baseUrl, 'http://[2408:1::5]:45873')
   assert.equal(parseNodeLink('http://hub.test/#node-monitor-join=ABC').ok, false)
   assert.equal(parseNodeLink('http://hub.test/#node-monitor-add=%%%').ok, false)
+})
+
+test('只读快照：清空会话明细与最近事件，控制状态强制关闭', () => {
+  const snapshot = restrictSnapshot({
+    protocol: PROTOCOL,
+    host: { hostname: 'pc-1' },
+    sessions: { total: 3, running: 1, idle: 2, list: [{ id: 's-1', title: 'secret', cwd: 'C:/work' }] },
+    metrics: { cpuPct: 10, memPct: 20, diskFreePct: 30 },
+    control: { enabled: true, restart: true, actions: ['plugins.setEnabled'] },
+    recent: [{ at: '2026-01-01T00:00:00.000Z', code: 'event.agent.created', params: { id: 's-1' } }]
+  })
+  assert.deepEqual(snapshot.sessions, { total: 3, running: 1, idle: 2, list: [] })
+  assert.deepEqual(snapshot.control, { enabled: false, restart: false, actions: [] })
+  assert.deepEqual(snapshot.recent, [])
+  assert.equal(snapshot.host.hostname, 'pc-1')
+  assert.equal(snapshot.metrics.cpuPct, 10)
 })

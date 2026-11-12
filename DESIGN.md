@@ -695,3 +695,23 @@ PC (NAT 后) ──POST /hub/push（Bearer 加入令牌，每 3s）──▶ 服
 ### 12.6 与 Hub 模式组合
 
 agent 服务同时注册了 `hub/push` 与 `hub/result`，因此「远程主节点」的地址可以填 `http://<虚拟IP>:45873`：客户端只走插件端口，不触发 DSH 的登录与 Host 校验，适合 Tailscale / ZeroTier / IPv6 直连场景；实机以 `POST :45873/node-monitor/api/v1/hub/push` 验证返回 `{ok:true,commands:[]}`。
+
+## 13. 安全审核与加固（v0.6.3）
+
+对 v0.6.2 全量代码做了一次缺陷审核（入口：`lib/index.js` 的 secrets/agent/pair/hub/control/readBody/audit 路径，`lib/core.js` 的 sanitize 链，`lib/client.js` 的复制与解析器），发现并修复：
+
+| # | 级别 | 问题 | 修复 |
+| --- | --- | --- | --- |
+| 1 | 高危 | 自动配对无认证且返回完整 `agentToken`，局域网任意主机可获取控制权 | 引入只读 `statusToken`；自动配对只返回/只交换只读令牌；只读响应经 `restrictSnapshot()` 清空会话明细与最近事件并关闭控制 |
+| 2 | 高 | `autoPair` 隐式启用 `allowControl`，违背默认关闭 | 删除隐式开启；自动节点只读，控制需手动粘贴完整令牌 |
+| 3 | 高 | Hub 控制命令 20s 超时后仍留在队列，节点重连会执行过期命令 | 命令带 `expiresAt`；超时从队列移除；下发前过滤过期命令；队列上限 10 |
+| 4 | 中 | `hubPeers` 无上限/无过期，nodeId 可被不同 IP 覆盖 | 上限 128 + 7 天清理；记录来源 IP，60s 内 IP 变化拒绝 409 `peer-conflict` |
+| 5 | 中 | 请求体读取无超时（slowloris） | 20s 定时器，超时销毁连接 |
+| 6 | 中 | `audit.jsonl` 无限增长 | 5MB 轮转为 `audit.jsonl.1` |
+| 7 | 中 | 复制仅依赖 `navigator.clipboard`，http/手机不可用 | `copyText()` 回退 `textarea + execCommand` |
+| 8 | 低 | 自动节点仍显示运维控制按钮（请求会 401） | Detail 对自动节点显示只读说明 |
+| 9 | 低 | 接入码无风险提示 | 增加「接入链接等同密码」提示 |
+| 10 | 低 | `autoPairAttempts` 无上限 | 10 分钟清理，>512 停止自动配对 |
+
+测试：新增 `restrictSnapshot` 单测与「自动配对只交换只读令牌」集成测试，全量 48/48 通过。已知未做：接入码有效期、Hub 端持久化 peer 列表、打开远端 DSH 仍依赖其登录令牌。
+\n
