@@ -349,7 +349,7 @@ test('appendEvent 保留最新事件并截断', () => {
 
 test('持久化状态不含令牌且可完整恢复', () => {
   const persisted = toPersistedState({
-    nodes: [node({ path: null, tags: ['prod'], extra: 'drop-me' })],
+    nodes: [node({ path: null, tags: ['prod'], remoteId: 'peer-1', extra: 'drop-me' })],
     settings: clampSettings({ cpuWarnPct: 90 }),
     acks: { 'n1:node.cpu': '2026-01-01T00:00:00.000Z' },
     seededSelf: true
@@ -358,12 +358,14 @@ test('持久化状态不含令牌且可完整恢复', () => {
   assert.equal(raw.includes('token'), false)
   assert.equal(raw.includes('secret'), false)
   assert.equal(persisted.nodes[0].extra, undefined)
+  assert.equal(persisted.nodes[0].remoteId, 'peer-1')
   assert.equal(persisted.seededSelf, true)
 
   const restored = fromPersistedState(JSON.parse(raw))
   assert.equal(restored.seededSelf, true)
   assert.equal(restored.nodes.length, 1)
   assert.equal(restored.nodes[0].name, '测试节点')
+  assert.equal(restored.nodes[0].remoteId, 'peer-1')
   assert.equal(restored.settings.cpuWarnPct, 90)
   assert.equal(restored.acks['n1:node.cpu'] !== undefined, true)
 

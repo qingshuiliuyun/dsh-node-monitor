@@ -1,361 +1,291 @@
 # dsh-node-monitor
 
-> 仓库：<https://github.com/qingshuiliuyun/dsh-node-monitor> · 安装包见 `dsh-node-monitor-dist/` 或 Releases。
+**多 DSH 节点监控与管控插件**：把本机、局域网、跨公网的多台 DSH 收进同一个左侧栏面板，查看状态、会话概览，按需远程打开、配对和运维。
 
-多 DSH 节点互联监控插件：在**左侧栏固定入口**打开统一面板，查看 Windows PC、云服务器、手机与浏览器上每一个 DSH 实例的在线状态、会话/任务负载、指标、日志摘要与告警，并可做基础管理。
+- 左侧栏固定入口 `节点监控`（order 20），主面板同 id
+- 支持 Windows / macOS / Linux 的 DSH Web 与桌面端（浏览器内渲染，响应式）
+- 同一局域网内**装完即用**：自动发现、自动互加，无需 `--host`、无需手工配置
+- 没有公网 IP 也能连：接入码 + Tailscale / ZeroTier / IPv6 直连
+- 有一台公网可访问的 DSH 时，可把它当**远程主节点（Hub）**，其余机器出站反连
+- 运维控制默认关闭；只读令牌、dry-run、二次确认、审计日志、限流
 
-- 总览：节点卡片、健康度、在线/异常/离线统计、告警、最近活动
-- 详情：CPU/内存/磁盘/会话指标、主机信息、探测延迟、节点告警、最近事件
-- 实时：宿主每 5s 探测一轮，面板按设置轮询 `state`；断线自动指数退避，页面隐藏时暂停
-- 安全：节点令牌只保存在宿主侧 `0600` 密钥文件；RPC 走 DSH 已认证的 Connection 通道；agent 端点强制 Bearer + 恒时比较 + 限流
-- 自适应：桌面/手机响应式布局，侧栏图标用状态色点直接显示健康度
-- 多机 Hub（v0.2.0）：给节点配对「登录材料」后，点卡片上的「打开」即在新标签页进入该节点的**真实 DSH 界面**（同一套 UI、同样的会话与任务能力），不需要在 Hub 里重写聊天
+仓库：<https://github.com/qingshuiliuyun/dsh-node-monitor>  
+当前版本：**v0.6.4**（2026-11-12）  
+测试：`npm test` → **48/48**（30 单测 + 18 集成）  
+安装包：`dsh-node-monitor-dist/dsh-node-monitor-0.6.4.zip` / `.tgz` 或 GitHub tag `v0.6.4`
 
-> 设计说明、接口契约与验收标准见 [DESIGN.md](./DESIGN.md)。
+---
 
-## 界面预览
+## 功能总览
 
-左侧栏入口（图标内状态点 = 全局健康度）：
+| 能力 | 说明 | 起始版本 |
+| --- | --- | --- |
+| 状态总览 | 节点卡片：在线状态、延迟、CPU/内存/磁盘、会话数、最近活动、告警 | v0.1 |
+| 节点详情 | 主机信息、运行时长、负载、协议、令牌状态、最近事件 | v0.1 |
+| 只读会话概览 | 仅展示会话 ID/状态/模型/工作目录/最近活动时间，不读取对话内容 | v0.3 |
+| 任务与告警 | 阈值告警、离线告警、告警确认、事件流 | v0.1 |
+| 基础管理 | 添加/编辑/删除节点、测试连接、启停探测、批量探测/启停 | v0.1 / v0.3.1 |
+| 左侧栏入口 | 固定图标 + 状态色（绿/黄/红/灰），点击进入主面板 | v0.1 |
+| 一键打开真实 DSH | 用一次性票据 302 到目标节点登录页；同源时可内嵌 | v0.2 / v0.3 |
+| 运维控制 | 插件列表/启停、重启（可选）；默认关闭，dry-run + confirm + 审计 | v0.3 |
+| 局域网自动发现 | UDP 45871 广播公开身份，不广播令牌；令牌确认后接入 | v0.4 |
+| 双向配对 | A 添加 B 后，B 自动登记 A，两侧都出现对方 | v0.4.1 |
+| 零配置自动组网 | 插件自监听 45873，发现后自动互加（只交换只读令牌） | v0.5 |
+| 远程主节点 Hub | 公网/常开 DSH 作 Hub，PC 每 3s 出站上报，跨 NAT 无需入站端口 | v0.6 |
+| 加入链接 / 二维码 | Hub 一键分享加入信息，链接令牌只放 URL `#` 片段 | v0.6.1 |
+| 无服务器接入码 | `http://<LAN/Tailscale/IPv6>:45873` + 令牌，一条链接完成添加 | v0.6.2 |
+| 安全加固 | 只读令牌、Hub 命令过期、peer 上限、请求超时、审计轮转 | v0.6.3 |
 
-![侧栏入口](docs/screenshots/sidebar.png)
+## 架构速览
 
-总览：节点卡片、统计、告警、最近活动
-
-![总览](docs/screenshots/overview.png)
-
-两路真实 DSH 实例（3099 本机 + 3098 第二实例）同时在线：
-
-![多节点](docs/screenshots/multi-node.png)
-
-节点详情：指标、主机信息、节点告警、最近活动
-
-![节点详情](docs/screenshots/node-detail.png)
-
-添加节点（含「测试连接」）：
-
-![添加节点](docs/screenshots/add-node.png)
-
-移动端 390×844 单列布局：
-
-![移动端](docs/screenshots/mobile.png)
-
-### 多机 Hub（v0.2.0）：一键打开远端真实 DSH
-
-两台真实实例同时在线，卡片头部直接提供「打开」；第二台节点已配对登录材料（Tailscale）：
-
-![Hub 总览](docs/screenshots/hub-overview.png)
-
-编辑节点时配对登录地址（令牌只落宿主 0600 文件，页面不回显）：
-
-![配对登录材料](docs/screenshots/hub-pairing.png)
-
-点「打开」后的新标签页：已经进入远端实例自己的 DSH 界面（左侧栏、会话、任务都是它自己的）：
-
-![打开远端节点](docs/screenshots/hub-open-node.png)
-
-Hub 的移动端视图（390×844）：
-
-![Hub 移动端](docs/screenshots/hub-mobile.png)
-
-### 会话概览（H1）：只读，不读对话内容
-
-![会话概览](docs/screenshots/hub-sessions.png)
-
-### 运维控制（H3）：dry-run + 行内确认 + 节点侧审计
-
-![运维控制](docs/screenshots/hub-control.png)
-
-### 同源内嵌（H2）：在 Hub 里直接操作远端 DSH
-
-![内嵌远端 DSH](docs/screenshots/hub-embed.png)
-
-### 分组筛选 + 告警联动（H4）
-
-![筛选](docs/screenshots/hub-filters.png)
-
-### 批量操作（H4）：多选探测/启用/停用
-
-![批量操作](docs/screenshots/hub-batch.png)
-
-
-## 已验证（2026-11-12，实机）
-
-| 项目 | 结果 |
-| --- | --- |
-| 自动化测试 | `npm test` → **48/48** 通过（30 单测 + 18 集成，含真实 `node:http` 往返、加载安全、登录材料/一次性票据、控制面 dry-run/confirm/审计、批量操作、局域网发现、双向配对、远程主节点上报与控制往返、加入链接编码/解码与二维码、接入链接与多地址枚举） |
-| 无服务器接入码（v0.6.2） | A 面板生成接入链接（含 `172.18.0.7:45873` + 令牌）；B「添加节点」粘贴后地址/令牌自动填充，保存后节点在线；agent 端口在 `*:45873` 双栈监听；0 console error |
-| 加入链接/二维码（v0.6.1） | Hub 面板生成 `#node-monitor-join=…` 链接并复制到剪贴板；客户端粘贴后自动填入地址+令牌并连接成功；二维码解码回归原文；0 console error |
-| 远程主节点（v0.6.0） | 服务器实例作 Hub + PC 实例作为客户端反连：PC 面板显示「已连接」，Hub 面板出现「远程」节点（状态/指标/会话/告警），`hubInfo` 之外不暴露加入令牌；0 console error |
-| 安装 | `plugin_manager install_bundle` → `applied`，profile 增加 link 依赖与 bundle 条目 |
-| 节点端点 | `GET /node-monitor/api/v1/health` → `200 {"ok":true,"protocol":"dsh.node-monitor/1","name":"dsh-node-monitor"}`；`/status` 无 Bearer → `401` |
-| 落盘权限 | `~/.dsh/node-monitor/secrets.json`、`state.json` 均为 `0600`，`state.json` 内不含任何令牌 |
-| 左侧栏 | 主 GUI（:3081）与隔离实例（:3099）均出现「节点监控」入口，点击选中主面板 |
-| 总览 | 自检节点在线、CPU/内存/磁盘/会话指标、事件流正常刷新 |
-| 跨实例多节点 | 另起一个独立 DSH 实例（:3098，独立 `DSH_HOME`），用其 `secrets.json` 的 agent 令牌在面板中添加为第二节点 → `节点 2 / 在线 2`，两节点各自上报 CPU/内存/磁盘/延迟，事件流与详情页均正确 |
-| H1 会话概览 | mock 节点返回 3 个会话（running/idle/子会话）+ 对话正文字段 → 面板只显示 ID/状态/模型/目录/时间，`messages` 未泄漏（`LEAK=false`），0 console error |
-| H2 同源内嵌 | Hub(:3093) 与节点(:3092) 同站：iframe 经一次性票据 302 进入节点真实 DSH（`FRAME_HAS_NEW_SESSION=true`），0 console error；跨站降级为新标签页 |
-| H3 运维控制 | 节点开启 `allowControl` 后 `/status.control` 返回 4 个动作；面板列出 60 个可管理插件、行内确认 1 条；dry-run 不落变更、审计写入 `audit.jsonl`（0600） |
-| H4 筛选/告警 | 搜索「云服务器」→ `1 / 3 个节点`；分组标签显示在卡片；未确认告警行可直达节点详情 |
-| H4 批量操作 | 勾选 2 个节点 → 批量栏显示「已选 2 个节点」；批量停用/启用后卡片 `enabled` 落盘、停用节点不再探测；批量探测逐个刷新并写事件；0 console error |
-| 告警闭环 | 添加离线节点 → 约 10s 后 `节点离线` 告警与离线统计 → `确认` 后未确认告警归零 → 移除节点恢复 |
-| 弹窗/表单 | 添加节点（DSH / 通用 HTTP、健康检查路径、令牌、标签、测试连接）、设置、移除确认全部可用 |
-| 移动端 | 390×844 单列布局，卡片与弹窗自适应 |
-| Hub 免登录打开（v0.2.0） | 两台独立实例（:3093 Hub、:3092 节点）：给节点配对登录材料后点「打开」→ 一次性票据经 `/node-monitor/open` 302 到节点登录地址 → 新标签页进入远端实例自己的 DSH 界面（标题 `DeepSeek Harness`，侧栏含该节点的「节点监控」入口），Hub 控制台 0 error |
-| 登录材料安全 | 面板只显示「已配对 · host」；`state.json` 无明文；`secrets.json` 0600 保存；票据 60s 过期、nonce 一次性、重放/篡改返回 403 |
-| 旧宿主降级（v0.2.0） | 宿主半未重载时（主实例 :3081，v0.1.x）刷新新客户端 | 卡片显示「内网 / 未配对」；「打开」退化为直接打开节点地址；编辑弹窗提示重启 DSH；控制台 0 error |
-| 浏览器控制台 | 整个流程 0 error（`docs/console-errors.json` 为 `[]`） |
-
-截图见 `docs/screenshots/`，采集脚本（Playwright）与验证环境说明见 `DESIGN.md` §8.5。
-
-## 安装（推荐：本机 profile）
-
-```bash
-# 在 DSH 宿主上执行（插件目录就是本包目录）
-dsh plugin add /root/dsh_workspace/dsh-node-monitor
+```
+┌────────────────────────── 浏览器（任意设备） ──────────────────────────┐
+│  左侧栏「节点监控」→ main 面板                                          │
+│    │ Connection RPC（DSH Cookie 认证，/node-monitor-rpc）               │
+└────┼───────────────────────────────────────────────────────────────────┘
+     ▼
+┌────────────────────────── 宿主插件（Node 侧） ─────────────────────────┐
+│  NodeMonitorHost                                                       │
+│   ├─ 节点注册表 / 告警 / 事件 / 审计（~/.dsh/node-monitor）              │
+│   ├─ 探测调度（HTTP，4s 超时，失败 2 次离线）                            │
+│   ├─ agent HTTP 服务（45873，双栈）                                     │
+│   ├─ UDP 发现（45871）+ 自动配对                                        │
+│   └─ Hub 客户端（可选，3s 出站 POST）                                   │
+└────┬───────────────────────────────┬───────────────────────────────────┘
+     │ Bearer HTTP（agentPort）       │ Hub push/result
+     ▼                               ▼
+ 其他 DSH 节点                   远程主节点（公网 DSH）
 ```
 
-或在 DSH Web GUI 的插件市场/插件管理中使用「安装本地 bundle」，目标填本目录的绝对路径：
+四种典型拓扑：
 
-```text
-/root/dsh_workspace/dsh-node-monitor
+1. **单机 / 同局域网**：插件自监听 45873，UDP 发现后自动互加，零配置。
+2. **跨网络 + 一台公网 DSH**：公网 DSH 作 Hub，PC 出站 `hub/push`，无需端口映射。
+3. **无公网服务器**：Tailscale / ZeroTier / IPv6 直连，用「接入码」一条链接添加节点。
+4. **反代/域名部署**：配置 `publicUrl`，面板生成正确的加入链接与二维码。
+
+## 安装
+
+### 方式 A：在 DSH 面板里安装（推荐）
+
+DSH →「插件」→「添加插件」→ 粘贴以下任一地址 → 安装 → **重启 DSH**：
+
+```
+https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.4
 ```
 
-安装会把本包注册为 profile bundle（`package.json` 的 `dsh.profile.bundles`，依赖写成 `link:<本目录>`），插件行由本包自带的 `dsh.bundle.patch`（`cordis.patch.yml`）在加载时组合，**不需要手工改 profile 文件**。随后刷新页面即可在左侧栏看到「节点监控」图标。
+也支持直接填 GitHub 仓库地址 `https://github.com/qingshuiliuyun/dsh-node-monitor`（会拉默认分支）。
 
-> 实机提示：安装会触发 profile 重建。若日志出现 `listen EADDRINUSE` / `HMR is disposed`，说明宿主端口被占用、热更新未能接管，属宿主侧现象；插件本身仍可能已生效（先访问 `/node-monitor/api/v1/health` 确认）。必要时重启一次 `dsh web`。
+### 方式 B：本地目录（离线包）
 
-更新：重新执行 `dsh plugin add <目录>`（或在插件管理中升级），HMR 会重建插件的宿主与浏览器两半。**v0.2.0 新增的 Hub 能力在宿主半（`openTicket`/登录材料存储），需要在宿主重启后生效**；浏览器半刷新页面即生效，旧宿主下「打开」会自动退化为直接打开节点地址。
+解压 `dsh-node-monitor-0.6.4.zip`，在「添加插件」里填解压后的目录绝对路径，或在 profile 里用：
 
-## 加载安全与故障隔离（v0.1.1）
+```
+dsh plugin add /绝对路径/dsh-node-monitor
+```
 
-插件加载阶段（安装、升级、宿主热重载）曾经可能拖住宿主：`apply()` 里等待 `connection`/`webServer` 服务就绪最长 8 秒，重载窗口内会让插件激活看起来像卡死，进而表现为整站无响应。v0.1.1 起改为：
+### 方式 C：手工挂载（不推荐）
 
-| 机制 | 行为 |
-| --- | --- |
-| 非阻塞激活 | `apply()` 立即返回 disposer，初始化在后台执行；任何一步失败只记日志并降级，不向 Loader 抛错 |
-| 短窗口挂载 | Web 集成最多等待 1.5 秒；服务未就绪则后台补挂，面板轮询会自动重试 |
-| 重复注册重试 | RPC 通道/路由被上一实例占用时做 5 次×400ms 重试，而不是抛异常 |
-| 面板错误边界 | 浏览器侧用 `PanelBoundary` 包住整个面板；渲染异常只降级为面板内提示 + 刷新按钮，不冒泡到宿主 UI |
-| 一键停用 | 配置 `enabled: false` 或环境变量 `DSH_NODE_MONITOR_DISABLE=1`，插件完全不注册任何东西 |
+在 profile 的 `package.json` 里加 `"dsh-node-monitor": "link:/绝对路径/dsh-node-monitor"`，并把 `dsh-node-monitor` 加入 `dsh.profile.bundles`；**不要**改 `cordis.patch.yml`（bundle 自带的 patch 会在加载时合成）。
 
-如果怀疑插件与宿主异常有关，按下面顺序处理：
+### 升级与回滚
 
-1. **先停用**：在 profile 的插件配置里给本插件加 `config: { enabled: false }`，或启动宿主前设 `DSH_NODE_MONITOR_DISABLE=1`，然后重启 `dsh web`；
-2. 确认问题消失后，再检查 `[node-monitor]` 前缀的宿主日志与浏览器控制台；
-3. 需要彻底移除时执行 `dsh plugin remove dsh-node-monitor`（或在插件管理中卸载）。
+- 升级：重复「添加插件」并填新 tag 的 tarball 地址 → 重启 DSH。
+- 回滚：填旧 tag 地址重装 → 重启。
+- 升级 v0.6.3+ 后建议在面板里**重新生成连接令牌**，让旧版自动配对留下的完整令牌立即失效。
 
-> 说明：插件只注册两条只读 HTTP 路由、一个已认证 RPC 通道、一个 600ms 后启动的采集定时器；不在加载期写业务数据。安装后首次刷新页面若仍短暂断开，属于宿主重载期间的正常重连。
+## 四种组网方式
 
-## 快速开始
+### 1. 同一局域网：装完即用
 
-1. 打开左侧栏「节点监控」。首次打开会自动接入一个「本机自检节点」，它用真实的 HTTP 探测链路验证整条监控通路。
-2. 在**其它 DSH 节点**同样安装本插件。
-3. 为这些节点配置同一个 agent 令牌（二选一）：
-   - 环境变量（推荐容器/云主机）：`DSH_NODE_MONITOR_TOKEN=<48位十六进制>`
-   - 或拷贝本机 `~/.dsh/node-monitor/secrets.json` 里的 `agentToken` 到远端的同名文件（`0600`）
-4. 回到面板 → 「添加节点」：填名称与地址（如 `https://node2.example.com`，不要带查询串/账号密码），适配器选「DSH」，粘贴令牌，点「测试连接」确认后保存。
-5. 令牌轮换：更新远端环境变量/密钥文件后，在面板编辑该节点并填入新令牌即可。
+两台机器都装插件并重启 DSH：
 
-## 多机集中管控 Hub（v0.4.0）
+1. Windows 首次运行会弹防火墙，**允许专用/公用网络**（TCP 45873、UDP 45871）。
+2. 打开任意一台的「节点监控」→ 几秒后「局域网发现」出现对方。
+3. 点「接入」，粘贴对方「本机配对信息」里的 12 位令牌 → 保存。
+4. 也可以什么都不做：v0.6 起会自动互加，双方都出现对方（只读状态）。
 
-v0.2.0 起，本插件除了「看状态」，还可以作为多机入口：**不在 Hub 里重写聊天**，而是把每台节点的真实 DSH 界面直接打开。这样会话、任务、工具全部走节点自己的 DSH，Hub 只负责入口与状态，协议零维护。
+> 企业 WiFi 开了 AP 隔离、或跨 VLAN 时，广播到不了，用下面的方式手工加。
 
-### 1. 给节点配对登录材料
+### 2. 跨公网：一台 DSH 当远程主节点（Hub）
 
-1. 在节点上启动 DSH，复制启动打印的地址（形如 `http://<host>:3080/?token=…`；反向代理后是 `https://node.example.com/?token=…`）；
-2. 在 Hub 面板里编辑该节点 → 「登录材料」粘贴这条地址 → 「保存登录材料」；
-3. 面板只显示 `已配对 · <host>`，地址与 token 只写入 Hub 宿主的 `~/.dsh/node-monitor/secrets.json`（0600），**不会**回显、不会写日志、不会进 `state.json`。
+适合有一台常开的旧电脑、NAS、云服务器。
 
-### 2. 一键打开
+**Hub 侧**：装插件并重启，打开「节点监控」→「远程主节点」，记下：
 
-点节点卡片或详情页的「打开」：面板先向宿主申请一次性票据（60 秒、nonce 只用一次、HMAC 签名），浏览器打开 `/node-monitor/open?id=…&t=…`，宿主校验通过后 `302` 到该节点登录地址，新标签页即为**该节点自己的 DSH 界面**。
+- 加入地址：例如 `http://192.168.1.10:45873`、`http://100.x.x.x:45873` 或 `https://dsh.example.com`
+- 加入令牌：12 位，可显示/复制/重新生成
 
-- 未配对登录材料时，「打开」直接落到节点地址，可手动粘贴令牌；
-- 宿主还没重载到 v0.2.0 时（旧版本仍在内存里），面板会自动退化为直接打开节点地址，并提示重启 DSH；
-- 登录令牌在 302 目标 URL 中，会出现在该标签页的地址栏；这是 DSH 自身的登录方式，请勿把该 URL 转发给他人。
+**PC 侧**：打开「节点监控」→「远程主节点」，地址填 Hub 的加入地址、令牌填 Hub 的加入令牌 → 连接。之后 Hub 面板会持续显示这些 PC（标签「远程」），状态/会话/插件启停可用。
 
-### 3. 网络不通怎么办
+> 优先填 **45873** 的 agent 地址：它是插件自己的服务，绕过 DSH 登录与 Host 校验。  
+> 跨网络时建议 Hub 与 PC 都在 Tailscale 里，或给 Hub 套 cloudflared 隧道。
 
-节点与 Hub 不在同一网络时，优先用 **Tailscale**（或 WireGuard）组私有网，节点地址填私有网 IP/域名；也可以让节点通过 Cloudflare Tunnel 暴露一个出站域名。面板的「网络位置」字段（内网 / Tailscale / 隧道 / 公网）用于标注与筛选，不影响探测逻辑。
+### 3. 没有服务器：接入码 + 虚拟局域网 / IPv6
 
-### 4. H1 会话概览（只读）
+1. 两台都装 v0.6.4 并重启。
+2. A：「本机配对信息」→「接入码」→ 选一个本机地址（局域网 IP / Tailscale 100.x / IPv6）。
+3. 复制接入链接（或让对方扫二维码）。
+4. B：「添加节点」→ 把链接粘贴到**节点地址**输入框 → 地址和令牌自动填好 → 保存。
 
-节点详情页新增「会话概览」：只显示会话 ID 短名、运行/空闲状态、模型、工作目录 basename、最近活动时间、父子层级，**不读取也不展示任何对话内容**（节点侧在构造 payload 时就只挑这些字段，最多 20 条，`messages/prompt/token` 一律丢弃）。Hub 侧只做展示，不新增聊天协议。
+底层网络任选：Tailscale（免费额度够家庭，不支持广播 → 用接入码）、ZeroTier（二层，可能直接广播发现）、公网 IPv6（`curl -6 ifconfig.co` 确认）、cloudflared 隧道。
 
-### 5. H2 同源内嵌
+### 4. 域名 / 反向代理
 
-节点与 Hub **同站**（`new URL(node.baseUrl).hostname === location.hostname`）时，卡片/详情提供「内嵌打开」：Hub 申请一次性票据 → iframe 指向 `/node-monitor/open?...` → 302 到节点登录地址 → iframe 内即节点真实 DSH。iframe 带 `sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"`，移动端全屏。
-
-- 跨站（不同 hostname）不内嵌，直接提示改用新标签页：DSH 的 Cookie/启动令牌按 authority 绑定，跨站 iframe 会 401，这是安全边界而不是缺陷；
-- 节点重启会轮换启动令牌，旧登录材料失效（内嵌出现 401）：重新配对登录材料即可；
-- 内嵌不会复制会话数据，操作发生在节点自己的 DSH 里。
-
-### 6. H3 运维控制（默认关闭）
-
-节点侧默认**不开放**控制面；要在节点上显式开启（二选一）：
+如果面板通过域名访问（HTTPS 反代），配置：
 
 ```yaml
-# 节点 profile 的插件 config
 - id: node-monitor
   name: 'dsh-node-monitor'
   config:
-    allowControl: true
-    allowRestart: true      # 可选，允许远程重启 DSH
+    publicUrl: 'https://dsh.example.com'   # 或环境变量 DSH_NODE_MONITOR_PUBLIC_URL
 ```
 
-或环境变量：`DSH_NODE_MONITOR_ALLOW_CONTROL=1`、`DSH_NODE_MONITOR_ALLOW_RESTART=1`（改完重启 DSH）。
+否则生成的加入链接/二维码会指向 `127.0.0.1`。反代只需把 `/` 转发到 DSH 端口；45873 是可选直连端口。
 
-| 动作 | 说明 | 门禁 |
+## 界面说明
+
+- **左侧栏**：图标颜色=汇总状态（红：严重告警/有节点离线；黄：有告警/异常；绿：全部在线；灰：未知）。
+- **总览**：汇总 chips、告警列表（确认/全部确认/打开节点）、节点卡片（CPU/内存/磁盘、会话、延迟）、筛选（关键字/状态/分组）、批量栏（探测/启用/停用）、事件流。
+- **节点详情**：状态、探测/编辑/删除、指标、主机信息、会话概览（只读）、运维控制（默认关闭）、告警、节点事件、协议与主机信息。
+- **本机配对信息**：节点 ID、显示名（可改）、连接令牌（显示/复制/重新生成）、接入码（多地址 + 二维码）。
+- **局域网发现**：广播到的节点、已接入/接入。
+- **远程主节点**：未连接时填地址+令牌；已连接显示状态；Hub 侧显示加入地址/令牌、已接入数量、复制加入链接、二维码。
+- **添加/编辑节点**：名称可留空（自动取远端 hostname）、地址、适配器（DSH/通用 HTTP）、网络、备注、令牌、标签、启用探测；粘贴加入链接/接入码会自动解析。
+- **移动端**：≤760px 单列，批量栏与筛选自动换行，内嵌视图全屏。
+
+## 安全模型
+
+插件同时使用几种令牌，权限严格区分（详见 [docs/SECURITY.md](docs/SECURITY.md)）：
+
+| 令牌 | 权限 | 使用场景 |
 | --- | --- | --- |
-| `plugins.list` / `bundles.list` | 只读列举，含 `manageable/readOnly` 标记 | 开启控制即可 |
-| `plugins.setEnabled` | 启用/禁用插件 | 默认 `dryRun:true` 只返回计划；真实执行需 `dryRun:false` **且** `confirm:true` |
-| `restart` | 重启节点 DSH（`process.exit(0)`，由 systemd/NSSM/容器拉起） | 需 `allowRestart` **且** `confirm:true` |
+| `agentToken`（连接令牌） | 完整：状态、会话元数据、控制 | 手动添加节点、接入码 |
+| `statusToken`（只读令牌） | 只读：计数/指标，无会话明细、无最近事件、不能控制 | 局域网自动发现/自动配对 |
+| `hubToken`（加入令牌） | 只允许 Hub 上报/领命令 | PC 连接远程主节点 |
+| `nodeTokens.*` | 对应节点的令牌 | Hub 访问已添加节点 |
 
-- Hub 界面在详情页「运维控制」：先「加载/刷新列表」，插件行内「禁用/启用」→ 行内确认，重启按钮需二次确认；列表按 Loader 条目 `entryId` 定位，只有带 `patchId` 的条目可管理（其余标只读）；
-- 每次调用（包括 dry-run、被拒绝的请求）都写入节点 `~/.dsh/node-monitor/audit.jsonl`（0600，JSONL），**绝不写入令牌**；
-- 控制端点仍是节点 HTTP 服务的一部分，必须走私有网/反代 + 单用户边界；不要直接暴露公网。
-
-### 7. H4 分组与告警联动
-
-- 总览顶部筛选条：关键词（名称/地址）、状态（在线/异常/离线/未知）、分组（节点标签），显示「筛选结果 / 总数」并可一键清除；
-- 节点卡片显示最多 2 个分组标签；告警行新增「打开节点」直达该节点详情；
-- 分组即节点标签（`tags`），编辑节点时填写，适合「机房/用途/环境」这类维度；
-- 批量栏（勾选卡片左上角复选框后出现）：全选当前（受筛选影响）、批量探测、批量启用、批量停用、清除选择；一次最多 64 个节点；
-- 批量启停只改「是否纳入监控」：停用后该节点不再周期探测、不产生新告警（历史事件保留），再启用即恢复；批量操作与单节点操作同样要求 owner 权限。
-
-## 全自动组网（v0.5.0）
-
-在**两台（或更多）同一局域网的电脑**上安装本插件并重启 DSH 后，无需手工操作即可互相看到：
-
-1. 插件会自动在 `0.0.0.0:45873` 打开一个「节点代理端口」（HTTP），因此不需要给 DSH 配 `--host`，也不会影响 DSH 原来的 3081 端口；
-2. 通过 UDP 45871 广播自己的身份（只含名称/端口/版本，不含令牌），收到广播后自动向对方 `/pair` 登记并取回对方令牌，双方自动互加（标签「自动」+「双向」）；
-3. Windows 首次运行如弹出防火墙提示，请勾选「专用网络」并允许，否则对端可能探测超时；
-4. 自动组网默认同时开放 DSH 层「插件启停」（有审计、dry-run），如不需要可设 `DSH_NODE_MONITOR_ALLOW_CONTROL=0`；跨网络的电脑仍需先组网（Tailscale/frp 等），或手工添加节点。
-
-## 无服务器的接入方式（v0.6.2）
-
-没有云服务器时，用一台普通电脑当被查看端即可：
-
-1. **被查看端**：「节点监控 → 本机配对信息 → 接入码」，在「接入地址」下拉里选一个能被对方访问的地址（局域网 IP、Tailscale 100.x、ZeroTier 10.x、IPv6 都行），点「复制接入链接」或「二维码」。
-2. **查看端**：「添加节点」→ 把整条接入链接**粘贴到「节点地址」输入框** → 地址和令牌自动填好 → 保存即可看到状态。
-
-支持的底层网络（任选其一，不需要公网服务器）：
-
-| 方式 | 说明 |
-|---|---|
-| 同一局域网 | v0.5 起零配置自动发现，甚至不用接入码 |
-| Tailscale | 免费额度够家庭用；选下拉里的 `100.x` 地址 |
-| ZeroTier | 免费额度约 25 台；选 `10.x` 或 `172.x` 地址 |
-| IPv6 直连 | 双方有公网 IPv6 时选 `http://[2408:…]:45873`；v0.6.2 起 agent 服务双栈监听 |
-| 免费隧道 | 一台常开的电脑当主节点 + `cloudflared tunnel --url http://127.0.0.1:3081`，其他电脑用「远程主节点」加入 |
-
-> 用 Tailscale/ZeroTier 当远程主节点时，客户端「主节点地址」请填 `http://<虚拟IP>:45873`（插件自己的 agent 端口），这样不经过 DSH 的登录与 Host 校验；`hub/push` 在 45873 与 3081 都可用。
-
-注意：Windows 防火墙首次要允许 TCP `45873`（局域网自动发现还需 UDP `45871`）；接入链接等同令牌，别发到公开群。
-
-## 远程主节点（v0.6.0，跨网络）
-
-### 加入链接与二维码（v0.6.1）
-
-在服务器 Hub 面板的「远程主节点」里：
-
-- **复制加入链接**：生成 `https://你的域名/#node-monitor-join=<令牌>`，发给另一台电脑；对方在「主节点地址」输入框里**直接粘贴整条链接**，地址和令牌会自动填好，点「连接」即可。
-- **二维码**：用手机扫码打开主节点页面同样能看到令牌；二维码由服务器本地生成，不经过任何第三方服务。
-- 令牌只放在链接的 `#` 片段里，浏览器**不会把 `#` 后面的内容发送给服务器**，所以不会进入访问日志。
-
-
-如果有一台公网可达的服务器，把服务器上的 DSH 当作「主节点」，其他电脑（家里/公司 NAT 后）无需公网 IP、无需端口映射即可接入：
-
-1. **服务器**：安装本插件并重启 DSH，打开「节点监控」→「远程主节点」，能看到「加入地址」（形如 `https://dsh.example.com`）和「加入令牌」（可显示/复制/重新生成）。
-2. **每台电脑**：安装本插件并重启 DSH，在「远程主节点」里填「主节点地址 + 加入令牌」，点「连接」。看到「已连接」即可。
-3. 服务器面板会把每台电脑显示为「远程」节点（在线状态、CPU/内存/磁盘、会话、告警），并可下发「插件启停」类控制（走队列 + 审计）。
-4. 电脑侧是**主动出站上报**（每 3 秒），所以不需要在路由器上开端口，也不要求服务器能反向访问电脑。
-
-安全与限制：
-
-- 加入令牌是唯一凭证，服务器只接受带正确令牌的上报；令牌可随时「重新生成」，旧令牌立即失效。
-- 服务器请用 HTTPS（现有反向代理即可）；纯 HTTP 只在可信内网使用。
-- 远程节点支持查看/告警/插件启停，不支持「打开完整 DSH 界面」，也暂不支持远程重启。
-- 关闭方式：服务器设 `DSH_NODE_MONITOR_HUB=0`；电脑侧点「断开」。
-
-## 安全模型与加固（v0.6.3）
-
-插件里同时存在几种令牌，用途和权限不同，v0.6.3 起严格区分：
-
-| 令牌 | 存放 | 权限 | 用途 |
-| --- | --- | --- | --- |
-| `agentToken`（连接令牌） | `~/.dsh/node-monitor/secrets.json`（0600） | 完整：状态、会话元数据、控制 | 手动添加节点、接入码（接入码等同密码） |
-| `statusToken`（只读令牌） | 同上 | 只读：仅计数/指标，无会话明细、无最近事件、不能控制 | 局域网自动发现、自动配对 |
-| `hubToken`（加入令牌） | 同上 | 只允许向 Hub 上报状态与领取命令 | PC 连接远程主节点 |
-| 节点令牌 `nodeTokens.*` | 同上 | 对应节点的连接令牌 | Hub 访问已添加节点 |
-
-同版本修复的问题：
-
-- **自动配对不再交换完整令牌**：自动发现/自动配对只收只读令牌，响应经 `restrictSnapshot` 清空会话标题、工作目录与最近事件，控制状态强制关闭；控制端点只接受完整令牌。
-- **运维控制默认关闭**：`autoPair` 不会再隐式打开 `allowControl`；自动节点只读，需要远程运维时手动编辑并粘贴完整令牌。
-- **Hub 命令过期**：20 秒未执行完的命令会从队列移除，节点重连不会执行过期操作；Hub 侧节点数量上限 128，同一 nodeId 60 秒内更换 IP 会被拒绝。
-- **慢请求与日志增长**：请求体读取 20 秒超时；`audit.jsonl` 超过 5MB 自动轮转为 `audit.jsonl.1`。
-- **复制按钮**：`navigator.clipboard` 不可用（http 局域网、手机）时回退到 `textarea + execCommand`。
-- **接入码提示**：接入链接等同密码，只发自己的设备；令牌可在面板里重新生成，旧令牌立即失效。
+- 运维控制默认关闭：`allowControl: true` / `DSH_NODE_MONITOR_ALLOW_CONTROL=1` 才可用；重启默认也关。
+- 控制请求默认 dry-run，真实执行需 `confirm: true`；每次调用写 `audit.jsonl`（0600）。
+- 加入链接/接入码令牌只放在 URL `#` 片段，不发给服务器；二维码本地生成。
+- 令牌文件 `~/.dsh/node-monitor/secrets.json` 0600，目录 0700；令牌不进 state、不进日志、不返回给非 owner。
+- 自动配对只交换只读令牌；自动接入的节点是只读的，要远程运维需手动粘贴完整令牌。
 
 ## 配置
 
-插件 Config 支持在 profile patch 中覆盖（一般不需要）：
+插件配置（profile patch 的 `config`，需重启 DSH）：
 
-```yaml
-- id: node-monitor
-  name: 'dsh-node-monitor'
-  config:
-    home: /root/.dsh        # 状态与密钥目录的 DSH_HOME；默认 $DSH_HOME 或 ~/.dsh
-```
+| 键 | 环境变量 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `home` | `DSH_HOME` | `~/.dsh` | 状态与密钥目录 |
+| `label` | — | 主机名 | 局域网显示名 |
+| `discovery` | `DSH_NODE_MONITOR_DISCOVERY=0` | `true` | 是否启用 UDP 发现 |
+| `discoveryPort` | `DSH_NODE_MONITOR_DISCOVERY_PORT` | `45871` | 发现端口 |
+| `discoveryPeers` | `DSH_NODE_MONITOR_DISCOVERY_PEERS` | — | 单播发现目标，`host:port,host:port` |
+| `agentPort` | `DSH_NODE_MONITOR_AGENT_PORT` | `45873` | agent 服务端口（双栈） |
+| `publicListen` | `DSH_NODE_MONITOR_PUBLIC_LISTEN=0` | `true` | 是否监听 `::`/`0.0.0.0` |
+| `autoPair` | `DSH_NODE_MONITOR_AUTO_PAIR=0` | `true` | 是否自动互加 |
+| `allowControl` | `DSH_NODE_MONITOR_ALLOW_CONTROL=1` | `false` | 允许远程插件启停 |
+| `allowRestart` | `DSH_NODE_MONITOR_ALLOW_RESTART=1` | `false` | 允许远程重启 DSH |
+| `hub` | `DSH_NODE_MONITOR_HUB=0` | `true` | 是否接受远程节点上报 |
+| `publicUrl` | `DSH_NODE_MONITOR_PUBLIC_URL` | — | 对外 origin，用于链接/二维码 |
 
-运行期可调参数在面板「设置」中修改（持久化在 `state.json`）：
+运行时设置（面板「设置」）：`refreshMs` 5000、`timeoutMs` 4000、`offlineAfterFailures` 2、`latencyWarnMs` 1500、`cpuWarnPct` 85、`memWarnPct` 90、`diskWarnFreePct` 10、`eventsLimit` 40。
 
-| 参数 | 默认 | 说明 |
+## 接口速查
+
+面板 ↔ 宿主：Connection RPC 通道 `/node-monitor-rpc`，全部 owner-only（除只读状态），动作：
+`state`、`refresh`、`addNode`、`updateNode`、`removeNode`、`ackAlert`、`ackAll`、`batchNodes`、`settings`、`testNode`、`setLogin`、`clearLogin`、`openTicket`、`control`、`hubJoin`、`nodeInvite`、`hubInfo`、`hubConnect`、`hubDisconnect`、`hubRotateToken`、`discoveryProbe`、`selfToken`、`rotateToken`、`updateLabel`。
+
+Agent HTTP（45873 / DSH 端口）：
+
+| 端点 | 认证 | 说明 |
 | --- | --- | --- |
-| refreshMs | 5000 | 宿主探测周期，同时也是面板轮询上限（2000–120000） |
-| timeoutMs | 4000 | 单次探测超时（800–30000） |
-| offlineAfterFailures | 2 | 连续失败多少次判定离线 |
-| latencyWarnMs | 1500 | 延迟告警阈值 |
-| cpuWarnPct / memWarnPct | 85 / 90 | CPU / 内存告警阈值 |
-| diskWarnFreePct | 10 | 磁盘可用空间告警阈值 |
-| eventsLimit | 40 | 宿主保留的最近活动条数 |
+| `GET /node-monitor/api/v1/health` | 无 | 存活探测 |
+| `GET /node-monitor/api/v1/status` | Bearer agentToken / statusToken | 状态快照；只读令牌返回精简版 |
+| `POST /node-monitor/api/v1/control` | Bearer agentToken | 运维动作（需 allowControl） |
+| `POST /node-monitor/api/v1/pair` | Bearer agentToken 或 auto | 双向登记（仅局域网来源） |
+| `POST /node-monitor/api/v1/hub/push` | Bearer hubToken | PC 上报 + 领取命令 |
+| `POST /node-monitor/api/v1/hub/result` | Bearer hubToken | 命令执行结果 |
+| `GET /node-monitor/open` | 一次性票据 | 302 到节点登录页 |
 
-## 节点侧接口
+UDP 发现：45871，组播 `239.255.43.21`，30s 一次，TTL 5 分钟，字段见 [DESIGN.md](DESIGN.md) §7.3。协议细节见 DESIGN。
 
-启用插件后，每个节点自动暴露：
+## 文档
 
-- `GET /node-monitor/api/v1/health`：无认证的极简健康检查（`{ok, protocol, name}`）
-- `GET /node-monitor/api/v1/status`：需要 `Authorization: Bearer <agentToken>`，返回协议化快照（主机、会话、指标、告警、最近活动）
-
-`/health` 不是 DSH 的 Web 鉴权，仅用于探活；`/status` 只暴露聚合只读快照，不含任何会话内容、提示词、密钥或文件内容。
-
-## 故障排查
-
-| 现象 | 处理 |
+| 文档 | 内容 |
 | --- | --- |
-| 侧栏没有图标 | 确认插件已安装且未在 profile 中禁用；查看宿主日志是否有 `[node-monitor]` 报错；刷新页面 |
-| 节点显示「认证失败」 | 两端令牌不一致、远端未设置 `DSH_NODE_MONITOR_TOKEN`，或远端 agent 端点被反代拦截 |
-| 节点显示「端点不存在」 | 远端未安装/未启用本插件，或地址指向了其它服务 |
-| 「无法连接节点」 | 检查地址/端口/防火墙/反向代理；本插件不跟随重定向，请直接填写最终地址 |
-| 面板打开空白 | 打开浏览器控制台，检索 `node-monitor` 或 `slot entry crashed`；确认客户端 bundle 已随 HMR 重建 |
-| 令牌丢了 | 删除 `~/.dsh/node-monitor/secrets.json` 后重启 DSH 会生成新令牌（需同步更新所有远端与已保存节点） |
+| [DESIGN.md](DESIGN.md) | 总体架构、数据模型、协议规格、安全模型、部署与测试 |
+| [docs/INSTALL.md](docs/INSTALL.md) | 分场景安装、端口/防火墙、升级回滚、排障 |
+| [docs/SECURITY.md](docs/SECURITY.md) | 威胁模型、令牌矩阵、数据暴露面、加固清单 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | 版本历史 |
+| [docs/screenshots/](docs/screenshots) | 界面截图（v0.6.x） |
+| [market/PUBLISH.md](market/PUBLISH.md) | 插件市场提交说明 |
+
+## 界面截图
+
+| 总览 | 多节点 |
+| --- | --- |
+| ![](docs/screenshots/overview.png) | ![](docs/screenshots/multi-node.png) |
+
+| 节点详情 | 接入码 |
+| --- | --- |
+| ![](docs/screenshots/node-detail.png) | ![](docs/screenshots/node-invite.png) |
+
+| 远程主节点 | 加入二维码 |
+| --- | --- |
+| ![](docs/screenshots/remote-hub.png) | ![](docs/screenshots/join-qr.png) |
 
 ## 开发与测试
 
 ```bash
-cd /root/dsh_workspace/dsh-node-monitor
-npm test          # node --test：core 单元测试 + 宿主集成测试（含真实 HTTP 往返）
+npm test                 # 48/48
+node --test --test-force-exit test/core.test.js
+node --test --test-force-exit test/host.test.js
 ```
 
-目录：
+- 无运行时依赖；二维码使用内置 `lib/qrcode.js`（qrcode-generator 2.0.4，MIT）。
+- 目录：`lib/core.js`（纯逻辑/协议）、`lib/index.js`（宿主）、`lib/client.js`（浏览器 bundle）、`lib/qrcode.js`。
+- 测试：`test/core.test.js`（30）、`test/host.test.js`（18，含真实 `node:http` 往返）。
+
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| 面板显示「未配对」 | 编辑节点粘贴对方完整令牌；或重新用接入码添加 |
+| 节点离线 | `curl http://<对端>:45873/node-monitor/api/v1/health`；Windows 防火墙放行 TCP 45873 |
+| 局域网发现为空 | 同一广播域？AP 隔离？UDP 45871 放行？企业 WiFi 改用手工添加/接入码 |
+| 加入链接打开是 127.0.0.1 | 反代部署需配置 `publicUrl` / `DSH_NODE_MONITOR_PUBLIC_URL` |
+| 打开节点 401 | 目标 DSH 的启动令牌已轮换，重新配对登录材料 |
+| 控制返回 403 | 目标节点未开 `allowControl`；自动接入节点只读，需完整令牌 |
+| 批量/控制 `unknown-endpoint` | 宿主仍是旧代码，重启 DSH |
+| Hub 看不到 PC | PC「远程主节点」是否已连接；Hub 的 45873 是否可达；令牌是否正确 |
+
+## 目录结构
 
 ```
-lib/core.js     纯逻辑（校验/探测解析/状态归并/告警/清洗/持久化），可脱离 DSH 单测
-lib/index.js    宿主插件：Connection RPC、agent HTTP 端点、采集器、持久化
-lib/client.js   浏览器 bundle：main 面板 + sidebar.panellist 图标
-locale/         meta.title / meta.description（插件展示元数据）
-test/           node --test
-docs/screenshots/ 实机截图（总览/详情/表单/移动端/侧栏）
-DESIGN.md       架构、接口、数据模型与验收文档
+dsh-node-monitor/
+├─ lib/            # core.js / index.js / client.js / qrcode.js
+├─ locale/         # zh.json / en.json
+├─ test/           # core.test.js / host.test.js
+├─ docs/           # INSTALL.md / SECURITY.md / CHANGELOG.md / screenshots/
+├─ market/         # 插件市场提交材料
+├─ assets/         # 市场图标
+├─ cordis.patch.yml
+├─ package.json
+├─ README.md
+└─ DESIGN.md
 ```
+
+## 路线图
+
+- 接入码有效期（默认 10 分钟，可续期）
+- Hub peer 列表持久化，重启立即恢复
+- 通知通道（Webhook/邮件/IM）与静默时段
+- 会话时间线（只读）与任务进度细分
+- 多用户/RBAC 与操作审批
+- npm 发布与市场收录后的自动更新提示
+
+## License
+
+MIT

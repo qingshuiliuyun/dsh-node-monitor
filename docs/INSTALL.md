@@ -1,153 +1,203 @@
-# 在两台 PC 上安装并互联（v0.3.1）
+# 安装与部署（v0.6.4）
 
-本包是 DSH 的 bundle 插件，**不需要联网安装依赖**（无运行时依赖）。两台机器各装一次，然后在一台的面板里把另一台加为节点即可。
+本文只讲「怎么装、怎么连、怎么排障」。架构与协议见 [../DESIGN.md](../DESIGN.md)，安全模型见 [SECURITY.md](SECURITY.md)。
 
-## 0. 包内容
+## 0. 前置条件
 
-- `dsh-node-monitor-0.3.1.tgz`：npm 打包产物（`package/` 目录 + 源码/文档/截图）
-- `dsh-node-monitor-0.3.1.zip`：同样的内容，外层目录名已是 `dsh-node-monitor/`，Windows 直接解压
-- `SHA256SUMS`：校验和
+- DSH `0.2.2-rc.1` 及以上（Web 或桌面端），profile 为 Web（`web`）。
+- 每台机器给 DSH 至少 1 个可用浏览器入口；插件在浏览器里渲染。
+- 局域网部署需允许 **TCP 45873**（插件 agent）与 **UDP 45871**（自动发现）。
+- 跨公网时不需要开放 DSH 的 3081/网页端口；只需要 45873 或一个隧道/虚拟网。
 
-## 1. 解压
+## 1. 安装
 
-Windows（PowerShell）：
+### 方式 A：面板安装（推荐）
 
-```powershell
-Expand-Archive .\dsh-node-monitor-0.3.1.zip -DestinationPath C:\dsh-plugins
-# 得到 C:\dsh-plugins\dsh-node-monitor
-```
+1. 打开 DSH →「插件」。
+2. 点右上「添加插件」→「安装第三方插件」。
+3. 粘贴以下地址之一：
 
-Linux / macOS：
-
-```bash
-tar xzf dsh-node-monitor-0.3.1.tgz && mv package dsh-node-monitor
-# 或 unzip dsh-node-monitor-0.3.1.zip
-```
-
-## 2. 安装（两种方式，选一种）
-
-### 方式 A：让 DSH Agent 装（推荐）
-
-在该 PC 的 DSH 会话里说：
-
-> 安装本地 bundle：`C:\dsh-plugins\dsh-node-monitor`（Linux 填解压后的绝对路径），然后重启 DSH。
-
-Agent 会调用 `plugin_manager install_bundle`，把包写进 profile 的 `dependencies` 和 `dsh.profile.bundles`。
-
-### 方式 B：手动登记到 profile
-
-编辑 `~/.dsh/profiles/web/package.json`（Windows 是 `C:\Users\<你>\.dsh\profiles\web\package.json`）：
-
-1. `dependencies` 增加：
-   ```json
-   "dsh-node-monitor": "link:C:/dsh-plugins/dsh-node-monitor"
    ```
-   （Linux/macOS 用绝对路径，例如 `"link:/opt/dsh-plugins/dsh-node-monitor"`）
-2. `dsh.profile.bundles` 数组末尾加 `"dsh-node-monitor"`
+   https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.4
+   ```
+
+   或仓库地址：
+
+   ```
+   https://github.com/qingshuiliuyun/dsh-node-monitor
+   ```
+
+4. 点「安装」，等待完成，**重启 DSH**。
+5. 左侧栏出现「节点监控」。
+
+### 方式 B：离线包
+
+1. 解压 `dsh-node-monitor-0.6.4.zip`（顶层目录 `dsh-node-monitor/`）。
+2. 「添加插件」里填解压后的**绝对路径**；或命令行：
+
+   ```bash
+   dsh plugin add /绝对路径/dsh-node-monitor
+   ```
+
 3. 重启 DSH。
 
-> 不要改 `cordis.patch.yml`——本包自带 `dsh.bundle.patch`，bundle 加载时自动插入。
+### 方式 C：手工挂载（仅调试）
 
-## 3. 让另一台机器能访问本机 DSH
+在 profile 的 `package.json` 中：
 
-DSH 默认只监听 `127.0.0.1`，**别的机器连不上**。必须绑定到一张真实网卡地址（DSH 拒绝 `0.0.0.0` 通配）：
+```json
+{
+  "dependencies": { "dsh-node-monitor": "link:/绝对路径/dsh-node-monitor" },
+  "dsh": { "profile": { "bundles": ["...", "dsh-node-monitor"] } }
+}
+```
+
+**不要**手改 `cordis.patch.yml`：bundle 自带的 patch 会在加载时合成。改完重启。
+
+## 2. 安装后自检
 
 ```bash
-# 同一局域网：用本机局域网 IP（Windows: ipconfig 看 IPv4）
-dsh --profile web --host 192.168.1.23 --port 3081
-
-# 不在同一网络：先装 Tailscale，两台都登录，用它给的 100.x 地址
-dsh --profile web --host 100.101.102.103 --port 3081
+# 1) 面板能打开，左侧栏有「节点监控」
+# 2) 宿主健康（DSH 端口与 agent 端口都应 200）
+curl -s http://127.0.0.1:3081/node-monitor/api/v1/health
+curl -s http://127.0.0.1:45873/node-monitor/api/v1/health
+# 3) 数据目录与权限（Linux/macOS）
+ls -ld ~/.dsh/node-monitor
+ls -l  ~/.dsh/node-monitor
+# 4) 本机自检节点应显示在线
 ```
 
-- Windows 首次运行放行防火墙（或手动放行 TCP 3081 / 你选的端口）；
-- 若要用「局域网自动发现」，还需放行 **UDP 45871**（入站）；不想开也能手动添加节点；
-- 启动日志会打印 `dsh web: http://<host>:<port>/?token=...`，用这个地址打开本机 GUI；
-- 验证从另一台机器可访问：`curl http://<IP>:3081/node-monitor/api/v1/health` 应返回 `200`。
+期望：
 
-## 4. 取节点令牌
+```json
+{"ok":true,"name":"dsh-node-monitor","protocol":"dsh.node-monitor/1","version":"0.6.4"}
+```
 
-每台机器装好后自动生成（0600）：
+## 3. 四种部署场景
 
-- Linux/macOS：`~/.dsh/node-monitor/secrets.json`
-- Windows：`C:\Users\<你>\.dsh\node-monitor\secrets.json`
+### 3.1 单机 / 同一局域网（零配置）
 
-里面的 `agentToken`（48 位十六进制）就是被别的 Hub 探测时要带的令牌。**不要发到公开渠道**；只在两台你自己的机器间复制。
+1. 两台都安装并重启。
+2. Windows 首次启动 DSH 时允许防火墙访问（专用网络即可）。
+3. 打开任一台「节点监控」，几秒后「局域网发现」出现对方；点「接入」，粘贴对方「本机配对信息」里的 12 位令牌。
+4. 或者什么都不做：默认会自动互加（只读），双方都出现对方。
 
-## 5. 在 Hub 上添加对端
+要求：同一广播域、UDP 45871 可达、没有 AP 隔离。跨 VLAN/企业 WiFi 用 3.3 的接入码。
 
-打开 A 的 GUI → 左侧栏「节点监控」→「添加节点」：
+### 3.2 远程主节点（有公网/常开机器）
 
-| 字段 | 填什么 |
+适合旧电脑、NAS、云服务器。
+
+**Hub 侧**
+
+1. 安装插件并重启；打开「节点监控」→「远程主节点」。
+2. 记录「加入地址」（如 `http://10.0.0.5:45873`、`http://100.x.x.x:45873`、`https://dsh.example.com`）与「加入令牌」。
+3. 需要跨公网时，给 Hub 配 Tailscale，或反代 + `publicUrl`。
+
+**PC 侧**
+
+1. 「远程主节点」→ 地址、令牌 → 连接。
+2. 状态变成「已连接 …」即可；Hub 面板会显示该 PC（标签「远程」）。
+3. 控制：Hub 端只能插件启停/列表（PC 端需 `DSH_NODE_MONITOR_ALLOW_CONTROL=1`）。
+
+要求：PC 能出站访问 Hub 的 45873；Hub 防火墙放行入站 45873。**不需要**开放 DSH 3081。
+
+### 3.3 没有服务器：接入码 + 虚拟局域网 / IPv6
+
+1. 两台安装 v0.6.4 并重启。
+2. A：「本机配对信息」→「接入码」→ 选地址（LAN/Tailscale 100.x/IPv6）→ 复制链接/二维码。
+3. B：「添加节点」→ 粘贴到**节点地址**栏 → 自动填地址和令牌 → 保存。
+4. 自测：
+
+   ```bash
+   curl http://<A地址>:45873/node-monitor/api/v1/health
+   curl -6 "http://[<A的IPv6>]:45873/node-monitor/api/v1/health"
+   ```
+
+推荐网络：Tailscale（免费额度、无需公网）、ZeroTier（二层，可能直接广播发现）、公网 IPv6（双方都要有，防火墙放行 45873）、cloudflared 隧道（给 Hub 用）。
+
+### 3.4 域名 / 反向代理
+
+```yaml
+- id: node-monitor
+  name: 'dsh-node-monitor'
+  config:
+    publicUrl: 'https://dsh.example.com'
+```
+
+- 反代只需要把 `/` 转到 DSH 的 3081；加入链接/二维码会使用 `publicUrl`。
+- 若反代不转发 45873，Hub 客户端仍可通过 HTTPS 访问 push/result（反代放行路径即可）。
+- 面板 origin 顺序：`config.publicUrl` → `DSH_NODE_MONITOR_PUBLIC_URL` → `webApp.getAdvertisedUrl()` → `webServer.getOrigin()`。
+
+## 4. 端口与防火墙
+
+| 端口 | 协议 | 用途 | 谁访问谁 |
+| --- | --- | --- | --- |
+| 3081（或反代 443） | TCP | DSH Web、面板、open 路由 | 浏览器 → 本机 |
+| 45873 | TCP | agent：status/health/pair/control/hub | 其他 DSH → 本机；本机 → Hub |
+| 45871 | UDP | 局域网发现（组播+广播） | 同一广播域 |
+
+Windows：首次运行会弹「允许访问」，或手动在「Windows Defender 防火墙 → 允许应用」放行 node。  
+Linux：`ufw allow 45873/tcp && ufw allow 45871/udp`。  
+云服务器安全组：至少放行 45873/tcp；发现用不到就不开 UDP。
+
+## 5. 令牌与开关
+
+- 面板「本机配对信息」：节点 ID、显示名、连接令牌（显示/复制/重新生成）、接入码。
+- 令牌文件：`~/.dsh/node-monitor/secrets.json`（0600）。**不要**把它拷到不可信机器。
+- 升级 v0.6.3+ 后建议「重新生成」一次，让旧版自动配对留下的完整令牌失效。
+- 关闭运维控制（默认已关）：不设置 `allowControl` 即可；或显式：
+
+  ```bash
+  DSH_NODE_MONITOR_ALLOW_CONTROL=0
+  DSH_NODE_MONITOR_ALLOW_RESTART=0
+  ```
+
+- 关闭 Hub 接收：`DSH_NODE_MONITOR_HUB=0`。
+- 关闭自动发现/自动配对：`DSH_NODE_MONITOR_DISCOVERY=0`、`DSH_NODE_MONITOR_AUTO_PAIR=0`。
+- 临时停用整个插件：`DSH_NODE_MONITOR_DISABLE=1`（或配置 `enabled: false`）。
+
+## 6. 升级与回滚
+
+1. 备份：`cp -a ~/.dsh/node-monitor ~/node-monitor-backup-$(date +%F)`。
+2. 面板「添加插件」填新 tag 的 tarball → 安装。
+3. **重启 DSH**（宿主代码更新必须重启；仅客户端变更刷新页面即可）。
+4. 回滚：重复安装旧 tag，重启；`state.json` 向后兼容。
+5. 降级到 v0.6.2 以下会失去只读令牌与 45873 双栈，建议不要跨大版本回滚。
+
+## 7. 常见问题
+
+| 现象 | 原因 | 处理 |
+| --- | --- | --- |
+| 左侧栏没有入口 | 插件未启用/宿主未重启 | 插件页确认启用，重启 DSH |
+| 节点一直离线 | 对端 45873 不可达 | `curl http://对端:45873/node-monitor/api/v1/health`；放行防火墙 |
+| 局域网发现为空 | 不同广播域 / AP 隔离 / UDP 未放行 | 用接入码手工添加，或改用 Hub |
+| 「未配对」且打开 401 | 未保存登录材料，或目标重启后令牌轮换 | 编辑节点粘贴新的登录地址 |
+| 加入链接打开是 127.0.0.1 | 未配置 publicUrl | 配 `DSH_NODE_MONITOR_PUBLIC_URL` |
+| 控制 403 | 节点未开 allowControl，或自动节点只读 | 节点侧开启控制；编辑节点粘贴完整令牌 |
+| 控制 401 | 令牌错误/已轮换 | 重新复制对方连接令牌 |
+| 批量/控制 `unknown-endpoint` | 宿主还在旧代码 | 重启 DSH |
+| Hub 看不到 PC | PC 未连接 / Hub 45873 不可达 / 令牌错 | PC 面板看「已连接」；`curl` Hub 45873 |
+| 内存上涨 | 历史 bug（v0.6.3 已修 Hub 队列/peer 无上限） | 升级 v0.6.3；观察 `hubPeers` 数 |
+
+## 8. 卸载
+
+1. 插件页停用「多 DSH 节点监控」。
+2. 删除 bundle 条目（profile `package.json` 的 `dsh.profile.bundles` 与 dependencies）。
+3. 重启 DSH。
+4. 可选删除数据：`rm -rf ~/.dsh/node-monitor`（会丢失节点与令牌）。
+
+## 9. 从旧版本迁移
+
+| 起点 | 动作 |
 | --- | --- |
-| 节点名称 | `PC-B` 之类 |
-| 节点地址 | `http://<B 的 IP>:3081`（B 启动时 `--host` 的那个地址） |
-| 接入适配器 | `DSH` |
-| 代理令牌 | 粘贴 B 的 `agentToken` |
-| 标签/备注 | 可选，如 `家里 / 主力机` |
+| v0.3/v0.4 | 直接升 v0.6.3；重新生成令牌；旧自动节点删除后重加 |
+| v0.5 | 升级后重启，45873 才生效；检查防火墙 |
+| v0.6.0–v0.6.2 | 升级 v0.6.3；轮换令牌；旧自动节点会自行去重（remoteId） |
+| 无插件 | 按第 1 节安装 |
 
-保存 → 卡片变「在线」并出现 B 的 CPU/内存/磁盘/延迟即互联成功。B 的防火墙/端口没放开时会是「离线 / 无法连接」。
+## 10. 获取帮助
 
-## 6. 配对「打开 / 内嵌」（可选）
-
-只做监控不需要这一步。要让 A 里直接跳进 B 的真实 DSH 界面：
-
-1. 在 B 的 GUI 地址栏取带 `?token=` 的登录 URL（B 启动日志里的那条；token 会随重启轮换）；
-2. A 的节点卡片「⋯ / 编辑」→ 登录材料 → 粘贴该 URL → 保存；
-3. 同域（A、B 同一主机名后缀）可「内嵌」，跨域会降级为新标签页（DSH Cookie 按 authority 绑定，属预期）。
-
-## 7. 运维控制（可选，默认关闭）
-
-B 侧需要显式开启后重启：
-
-```bash
-# Linux/macOS
-DSH_NODE_MONITOR_ALLOW_CONTROL=1 dsh --profile web --host <IP> --port 3081
-# 需要远程重启再加
-DSH_NODE_MONITOR_ALLOW_RESTART=1
-```
-
-Windows（PowerShell）：
-
-```powershell
-$env:DSH_NODE_MONITOR_ALLOW_CONTROL="1"; dsh --profile web --host <IP> --port 3081
-```
-
-开启后 A 的节点详情出现「运维控制」：插件列表 / 行内确认启停 / 二次确认重启；所有操作写 B 的 `~/.dsh/node-monitor/audit.jsonl`（0600）。
-
-## 8. 验收清单
-
-- [ ] 两台机器 `/node-monitor/api/v1/health` 都是 200
-- [ ] 两边左侧栏都有「节点监控」，面板能打开
-- [ ] A 添加 B 后显示「在线」，CPU/延迟随刷新变化
-- [ ] 把 B 的进程停掉 → A 约 10 秒后出现「节点离线」告警；确认后归零
-- [ ] （可选）会话概览只显示 ID/状态/模型/目录/时间，无对话内容
-- [ ] （可选）批量勾选 2 个节点 → 批量探测/停用/启用生效
-
-## 9. 常见问题
-
-| 现象 | 处理 |
-| --- | --- |
-| A 里 B 一直离线 | B 是否用 `--host` 绑了真实网卡？防火墙放行？`curl http://B:3081/node-monitor/api/v1/health` 通不通？ |
-| 状态接口 401 | 令牌不对/未填。令牌取 B 的 `secrets.json` 的 `agentToken` |
-| 「打开」报 401 / 登录页 | B 重启过，token 轮换了 → 重新粘贴登录 URL |
-| 内嵌按钮提示跨站 | 预期：跨域不能 iframe；用「打开」新标签页 |
-| 控制区提示未开启 | B 未设 `allowControl`，或设了没重启 |
-| 装完没出现左侧栏入口 | 重启 DSH；确认 profile `dsh.profile.bundles` 含 `dsh-node-monitor`；看 DSH 日志有无 `slot entry crashed` |
-| 批量按钮报 unknown-endpoint | 宿主半还是旧代码，重启 DSH |
-
-## 10. 卸载
-
-1. 从 profile `package.json` 的 `dsh.profile.bundles` 删除 `dsh-node-monitor`，并删除对应 `dependencies`；
-2. 重启 DSH；
-3. 可选：删除 `~/.dsh/node-monitor/`（含令牌与历史，删除前备份）。
-
-## 局域网自动发现（可选，v0.4.0+）
-
-同一 WiFi / 同一网段下：
-
-1. 两台都按上面的方式用 `--host <局域网IP>` 启动；
-2. 任一台打开「节点监控」→「本机配对信息」→ 点「显示」查看连接令牌（可「重新生成」为 `XXXX-XXXX-XXXX` 易读格式，可「改名」成自己的机器名）；
-3. 另一台在同面板「局域网发现」里看到对方 →「接入」→ 粘贴令牌 → 保存。
-
-说明：广播只含名称/地址/端口/版本/节点 ID，不含令牌；接入必须拿到对方令牌；发现仅同一广播域有效，跨网请用 Tailscale 或 frp。若企业 WiFi 拦截广播，可退回「添加节点」手填地址。
+- 先看 [故障排查](../README.md#故障排查) 与本文第 7 节。
+- 收集：DSH 版本、OS、插件版本、`~/.dsh/node-monitor/` 目录权限、`/health` 返回、浏览器 console 错误。
+- 不要附带 `secrets.json` 原文；如必须，先轮换令牌。
