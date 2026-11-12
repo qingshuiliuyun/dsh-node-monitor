@@ -9,7 +9,7 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { NodeMonitorHost, apply } from '../lib/index.js'
-import { AGENT_HEALTH_PATH, AGENT_STATUS_PATH, CONTROL_PATH, OPEN_PATH, PAIR_PATH, PROTOCOL, RPC_CHANNEL, buildAnnouncement } from '../lib/core.js'
+import { AGENT_HEALTH_PATH, AGENT_STATUS_PATH, CONTROL_PATH, HUB_PUSH_PATH, HUB_RESULT_PATH, OPEN_PATH, PAIR_PATH, PROTOCOL, RPC_CHANNEL, buildAnnouncement } from '../lib/core.js'
 
 const owner = { principal: { kind: 'owner' } }
 const browser = { principal: { kind: 'browser' } }
@@ -827,5 +827,92 @@ test('添加节点留空名称时自动取远端 hostname，并把本机登记�
     await host.dispose()
     for (const cleanup of cleanups) await cleanup()
     await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+
+test('远程主节点：PC 主动上报、Hub 投影节点、控制指令往返', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-hub-'))
+  const { ctx, routes, cleanups } = fakeContext('http://127.0.0.1:3996')
+  const host = new NodeMonitorHost(ctx, { home })
+  try {
+    await host.start()
+    await delay(50)
+    const push = routes.get(HUB_PUSH_PATH)
+    const result = routes.get(HUB_RESULT_PATH)
+    assert.equal(typeof push, 'function')
+    assert.equal(typeof result, 'function')
+    const token = host.secrets.hubToken
+    assert.ok(token && token.length >= 8)
+
+    const makeReq = (payload, { method = 'POST', auth = token } = {}) => ({
+      method,
+      socket: { remoteAddress: '203.0.113.9' },
+      headers: auth ? { authorization: `Bearer ${auth}` } : {},
+      on(event, callback) {
+        if (event === 'data') callback(Buffer.from(JSON.stringify(payload)))
+        if (event === 'end') callback()
+      }
+    })
+
+    const remoteId = 'peer-uuid-remote-1'
+    const payload = {
+      protocol: PROTOCOL,
+      generatedAt: new Date().toISOString(),
+      host: { hostname: 'office-pc', platform: 'win32', arch: 'x64', version: '0.5.0', uptimeSec: 120 },
+      sessions: { total: 2, running: 1, idle: 1, list: [{ id: 's-1', status: 'running', model: 'deepseek', cwd: 'C:/work' }] },
+      metrics: { cpuPct: 12.5, memPct: 33.3, diskFreePct: 55.5, memUsedBytes: 1, memTotalBytes: 2, diskFreeBytes: 1, diskTotalBytes: 2, load1: 0.5, uptimeSec: 120 },
+      control: { enabled: true, restart: false, actions: ['plugins.list', 'plugins.setEnabled'] },
+      alerts: [],
+      recent: []
+    }
+
+    const pushRes = mockRes()
+    await push(makeReq({ nodeId: remoteId, name: '办公室电脑', hostname: 'office-pc', version: '0.5.0', payload }), pushRes)
+    assert.equal(pushRes.statusCode, 200)
+    assert.deepEqual(pushRes.json().commands, [])
+
+    const state = await host.buildState()
+    const remote = state.nodes.find((node) => node.id === `hub:${remoteId}`)
+    assert.ok(remote, 'hub node projected')
+    assert.equal(remote.adapter, 'hub')
+    assert.equal(remote.name, '办公室电脑')
+    assert.equal(state.probes[`hub:${remoteId}`].status, 'online')
+    assert.equal(state.probes[`hub:${remoteId}`].snapshot.metrics.cpuPct, 12.5)
+    assert.equal(JSON.stringify(state).includes(token), false, 'hub token never leaves the host')
+
+    // 控制指令：RPC 挂起 → 下一次 push 取走指令 → result 回传后 RPC 返回
+    const pending = host.handleRpc(
+      'control',
+      { id: `hub:${remoteId}`, action: 'plugins.list', dryRun: false },
+      null,
+      owner
+    )
+    await delay(30)
+    const pollRes = mockRes()
+    await push(makeReq({ nodeId: remoteId, name: '办公室电脑', hostname: 'office-pc', payload }), pollRes)
+    const commands = pollRes.json().commands
+    assert.equal(commands.length, 1)
+    assert.equal(commands[0].action, 'plugins.list')
+
+    const resultRes = mockRes()
+    await result(makeReq({ nodeId: remoteId, commandId: commands[0].id, ok: true, value: { items: [{ id: 'entry-a', name: 'A', enabled: true }] } }), resultRes)
+    assert.equal(resultRes.statusCode, 200)
+    const answer = await pending
+    assert.equal(answer.ok, true)
+    assert.equal(answer.value.response.ok, true)
+    assert.deepEqual(answer.value.response.value.items.map((item) => item.id), ['entry-a'])
+
+    // 错误令牌
+    const badToken = mockRes()
+    await push(makeReq({ nodeId: remoteId, name: 'x', payload }, { auth: 'wrong-token' }), badToken)
+    assert.equal(badToken.statusCode, 401)
+
+    for (const cleanup of cleanups) await cleanup()
+    await fsp.rm(home, { recursive: true, force: true })
+  } catch (error) {
+    for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
+    await fsp.rm(home, { recursive: true, force: true }).catch(() => {})
+    throw error
   }
 })

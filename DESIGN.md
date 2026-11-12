@@ -595,3 +595,54 @@ cd /root/dsh_workspace/dsh-node-monitor && npm test
 - **默认值**：`publicListen=true`、`autoPair=true`、`allowControl` 在自动组网模式下默认开启（仍有 dry-run/confirm/audit，可 `DSH_NODE_MONITOR_ALLOW_CONTROL=0` 关闭）；`allowRestart` 仍默认关闭。
 - **安全边界**：只在局域网/回环生效；仅自动组网信任同一广播域；跨网段仍需 Tailscale/frp；自动节点不提供「打开完整 DSH 界面」（那需要 DSH 登录令牌，插件无法自动获取）。
 - **测试**：40 项全过；双实例（3093/3092，agentPort 45873/45874）零手工操作下双方 state 各自出现对端 `paired,auto` 节点。
+
+## 11. 远程主节点（v0.6.0，跨网络反连）
+
+### 11.1 目标与拓扑
+
+服务器上的 DSH 作为 Hub；每台 PC 的插件向 Hub **主动出站上报**，Hub 把 PC 投影为节点，实现跨 NAT 的集中查看与控制。
+
+```
+PC (NAT 后) ──POST /hub/push（Bearer 加入令牌，每 3s）──▶ 服务器 DSH（Hub）
+        ◀── commands 队列（下一次 push 取走）──
+        ──POST /hub/result──▶
+```
+
+### 11.2 协议
+
+| 端点 | 方法 | 认证 | 语义 |
+|---|---|---|---|
+| `/node-monitor/api/v1/hub/push` | POST | `Bearer <hubToken>` | 上报 `{nodeId,name,hostname,version,payload}`；返回 `{commands:[…]}` |
+| `/node-monitor/api/v1/hub/result` | POST | `Bearer <hubToken>` | 回传 `{nodeId,commandId,ok,value|error}` |
+
+- 心跳 3 秒一次（失败也继续重试）；超过 20 秒未上报视为离线。
+- `payload` 复用 agent `/status` 的结构（host/sessions/metrics/control/alerts/recent），Hub 用 `sanitizeSnapshot` 清洗。
+- Hub 侧状态里 `hubPeers` 只存内存（重启后由各 PC 的下一次上报自动恢复）。
+
+### 11.3 投影与状态
+
+- 远程节点 id 为 `hub:<nodeId>`，adapter `hub`，tags `['hub']`，baseUrl `hub://<nodeId>`，UI 标签「远程」。
+- 探测记录由 `hubPeers.lastSeen` 生成：20 秒内为在线，否则按 `offlineAfterFailures` 判离线并告警。
+- `buildState().hub = { enabled, origin, peers, link }`；**令牌不进入 state**，只通过 owner-only 的 `hubInfo` 显式读取。
+
+### 11.4 控制生命周期
+
+1. Hub 面板点「加载插件/启用」→ RPC `control { id: 'hub:<nodeId>', action }`；
+2. Host 把指令放入该节点的命令队列，RPC 挂起（20 秒超时）；
+3. PC 下一次 push 取走指令，本地 `dispatchControl` 执行（仍受 allowControl/dryRun/confirm 约束），POST `/hub/result`；
+4. Hub 收到结果后 resolve RPC，写 `event.control`，UI 更新。
+
+支持 `plugins.list`、`plugins.setEnabled`；`restart` 在远程模式下明确不支持（避免把节点重启后失联）。
+
+### 11.5 安全
+
+- 加入令牌 12 位（`XXXX-XXXX-XXXX`），仅 Hub 面板显式显示，可重新生成（旧令牌立即 401）。
+- 上报必须 HTTPS（由用户现有反向代理终止）；Hub 不主动连 PC，不需要入站端口。
+- 远程控制沿用本地审计 `audit.jsonl`（0600），记录 action/dryRun/confirm/结果，不含令牌。
+- 关闭：`DSH_NODE_MONITOR_HUB=0` 或 `config.hub:false`。
+
+### 11.6 已知限制
+
+- 3 秒级轮询，不是实时 WebSocket；对状态查看足够，对交互式操作有 3–20 秒延迟。
+- 不支持打开远端完整 DSH 界面（需要 DSH 自己的登录令牌），也不支持远程重启/SSH 级操作。
+- 需要服务器有公网 HTTPS 入口；纯 HTTP 仅限可信内网。
