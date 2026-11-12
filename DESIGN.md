@@ -646,3 +646,17 @@ PC (NAT 后) ──POST /hub/push（Bearer 加入令牌，每 3s）──▶ 服
 - 3 秒级轮询，不是实时 WebSocket；对状态查看足够，对交互式操作有 3–20 秒延迟。
 - 不支持打开远端完整 DSH 界面（需要 DSH 自己的登录令牌），也不支持远程重启/SSH 级操作。
 - 需要服务器有公网 HTTPS 入口；纯 HTTP 仅限可信内网。
+
+### 11.7 加入链接与二维码（v0.6.1）
+
+- 链接格式：`<origin>/#node-monitor-join=<token>`；`#` 片段不会随 HTTP 请求发送，令牌因此不进入服务器访问日志；页面读取后立即 `history.replaceState` 清除地址栏。
+- 生成：`core.encodeJoinLink(origin, token)`；`origin` 取 `config.publicUrl` / `DSH_NODE_MONITOR_PUBLIC_URL`，否则 `webApp.getAdvertisedUrl()`，最后回退 `webServer.getOrigin()`（反代部署请配置前两者之一）。
+- 解析：`core.parseJoinLink` 校验 http/https、令牌长度；客户端粘贴链接到地址输入框时自动填入 origin+token，不自动连接（仍需用户点「连接」）。
+- 二维码：宿主侧用内置 `qrcode`（MIT，Kazuhiko Arase，随包分发）生成 SVG，`hubJoin` RPC 返回 `{link, svg, origin}`；不调用任何第三方二维码服务。
+- 安全：链接本身即凭据，等同加入令牌；泄露后可在 Hub 面板「重新生成」使旧链接立即失效。
+
+### 11.8 测试
+
+- core：`encodeJoinLink`/`parseJoinLink`（含非法协议、缺令牌、路径保留）。
+- host：owner 可生成 `hubJoin`（link 含令牌、svg 以 `<svg` 开头、`publicUrl` 生效），非 owner 403。
+- 实机：Hub 生成链接→剪贴板内容与面板一致；二维码截图用 `jsQR` 解码回原文；客户端粘贴链接后地址/令牌自动填充并连接成功，0 console error。

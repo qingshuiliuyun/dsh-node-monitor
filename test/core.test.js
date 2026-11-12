@@ -16,6 +16,8 @@ import {
   computeAlerts,
   discoveryAddress,
   emptySnapshot,
+  encodeJoinLink,
+  parseJoinLink,
   formatMetrics,
   fromPersistedState,
   generateAgentToken,
@@ -552,4 +554,20 @@ test('配对令牌：可人工朗读，格式 XXXX-XXXX-XXXX 且不重复', () =
   const second = generatePairingToken()
   assert.match(first, /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/)
   assert.notEqual(first, second)
+})
+
+test('加入链接：生成与解析都只在 # 片段里携带令牌', () => {
+  const link = encodeJoinLink('https://dsh.example.com/', 'ABCD-EFGH-IJKL')
+  assert.equal(link, 'https://dsh.example.com/#node-monitor-join=ABCD-EFGH-IJKL')
+  const parsed = parseJoinLink(link)
+  assert.equal(parsed.ok, true)
+  assert.equal(parsed.value.origin, 'https://dsh.example.com')
+  assert.equal(parsed.value.token, 'ABCD-EFGH-IJKL')
+  assert.equal(parseJoinLink('https://dsh.example.com/').ok, false)
+  assert.equal(parseJoinLink('ftp://x.test/#node-monitor-join=ABCD-EFGH').ok, false)
+  assert.equal(parseJoinLink('ABCD-EFGH-IJKL').ok, false)
+  assert.equal(encodeJoinLink('not-a-url', 'ABCD-EFGH-IJKL'), '')
+  assert.equal(encodeJoinLink('https://a.test', 'short'), '')
+  const withPath = parseJoinLink('https://a.test/dsh/#node-monitor-join=AAAABBBBCCCC')
+  assert.equal(withPath.value.origin, 'https://a.test/dsh')
 })

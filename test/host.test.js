@@ -831,6 +831,28 @@ test('添加节点留空名称时自动取远端 hostname，并把本机登记�
 })
 
 
+test('加入链接与二维码：owner 可生成，令牌只在 # 片段', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-join-'))
+  const { ctx, cleanups } = fakeContext('http://127.0.0.1:3995')
+  const host = new NodeMonitorHost(ctx, { home, publicUrl: 'https://hub.example.com/' })
+  try {
+    await host.start()
+    await delay(30)
+    const info = await host.handleRpc('hubJoin', {}, null, owner)
+    assert.equal(info.ok, true)
+    assert.match(info.value.link, /^https:\/\/hub\.example\.com\/#node-monitor-join=/)
+    assert.ok(info.value.link.includes(host.secrets.hubToken))
+    assert.match(info.value.svg, /^<svg/)
+    assert.equal(info.value.origin, 'https://hub.example.com')
+    const denied = await host.handleRpc('hubJoin', {}, null, { principal: { kind: 'browser' } })
+    assert.equal(denied.ok, false)
+    assert.match(denied.error.code, /forbidden/)
+  } finally {
+    await host.dispose()
+    for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
+  }
+})
+
 test('远程主节点：PC 主动上报、Hub 投影节点、控制指令往返', async () => {
   const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-hub-'))
   const { ctx, routes, cleanups } = fakeContext('http://127.0.0.1:3996')
