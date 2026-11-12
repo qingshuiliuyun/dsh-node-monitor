@@ -2,6 +2,12 @@
 
 本文件记录 `dsh-node-monitor` 的功能、修复与安全变更。版本号遵循 SemVer；插件宿主半更新后需要重启 DSH，客户端半刷新页面即可生效。
 
+## v0.6.5 — 2026-11-12（文档补充）
+
+- 新增 `docs/ARCHITECTURE-DECISIONS.md`：14 条 ADR，记录 bundle 形态、Connection RPC、双令牌、45873 自监听、UDP 发现、只读自动配对、Hub 轮询、控制默认关闭、`#` 片段链接、本地二维码、JSON 持久化、非阻塞加载、不重写聊天 UI、零运行时依赖等取舍与后果。
+- 新增 `README.en.md`（英文 README），中英文顶部互链。
+- README/DESIGN/INSTALL 文档索引与版本号同步到 v0.6.5。
+
 ## v0.6.4 — 2026-11-12（文档与持久化修复）
 
 **文档**

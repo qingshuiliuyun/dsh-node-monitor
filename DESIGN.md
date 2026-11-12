@@ -1,6 +1,6 @@
 # dsh-node-monitor 设计文档
 
-> 适用版本：**v0.6.4**（2026-11-12）。本文是架构与协议规格；安装步骤见 [docs/INSTALL.md](docs/INSTALL.md)，安全细节见 [docs/SECURITY.md](docs/SECURITY.md)，版本历史见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
+> 适用版本：**v0.6.5**（2026-11-12）。本文是架构与协议规格；安装步骤见 [docs/INSTALL.md](docs/INSTALL.md)，安全细节见 [docs/SECURITY.md](docs/SECURITY.md)，关键取舍见 [docs/ARCHITECTURE-DECISIONS.md](docs/ARCHITECTURE-DECISIONS.md)，版本历史见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 1. 目标与非目标
 
@@ -60,6 +60,7 @@
 | v0.6.2 | 无服务器 | 接入码 `#node-monitor-add`、IPv6 双栈 |
 | v0.6.3 | 安全审计 | 只读令牌分权、命令过期、peer 上限、超时与日志轮转 |
 | v0.6.4 | 文档与修复 | 全套文档重写；`remoteId` 持久化，重启后 Hub/直连去重仍有效 |
+| v0.6.5 | 文档补充 | 架构决策记录（ADR）与英文 README |
 
 ## 4. 总体架构
 
@@ -184,7 +185,7 @@ Hub:      按 commandId resolve，RPC 返回结果
 端口 45871，组播 `239.255.43.21` + 广播 + 单播 peers；30s 一次；TTL 5 分钟；最多 32 条。报文：
 
 ```json
-{"m":"dsh-node-monitor/discovery/1","v":1,"id":"<nodeId>","label":"<显示名>","port":3081,"host":"<主机名>","version":"0.6.4","ap":45873,"path":"/","ts":1699999999999}
+{"m":"dsh-node-monitor/discovery/1","v":1,"id":"<nodeId>","label":"<显示名>","port":3081,"host":"<主机名>","version":"0.6.5","ap":45873,"path":"/","ts":1699999999999}
 ```
 
 接收方必须：校验协议/id/来源为 RFC1918/链路本地/回环、忽略自身 id、按 id 去重并刷新 lastSeen。**报文不含任何令牌。**

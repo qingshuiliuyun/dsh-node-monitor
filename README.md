@@ -1,5 +1,7 @@
 # dsh-node-monitor
 
+[English](README.en.md) | 简体中文
+
 **多 DSH 节点监控与管控插件**：把本机、局域网、跨公网的多台 DSH 收进同一个左侧栏面板，查看状态、会话概览，按需远程打开、配对和运维。
 
 - 左侧栏固定入口 `节点监控`（order 20），主面板同 id
@@ -10,9 +12,9 @@
 - 运维控制默认关闭；只读令牌、dry-run、二次确认、审计日志、限流
 
 仓库：<https://github.com/qingshuiliuyun/dsh-node-monitor>  
-当前版本：**v0.6.4**（2026-11-12）  
+当前版本：**v0.6.5**（2026-11-12）  
 测试：`npm test` → **48/48**（30 单测 + 18 集成）  
-安装包：`dsh-node-monitor-dist/dsh-node-monitor-0.6.4.zip` / `.tgz` 或 GitHub tag `v0.6.4`
+安装包：`dsh-node-monitor-dist/dsh-node-monitor-0.6.5.zip` / `.tgz` 或 GitHub tag `v0.6.4`
 
 ---
 
@@ -71,14 +73,14 @@
 DSH →「插件」→「添加插件」→ 粘贴以下任一地址 → 安装 → **重启 DSH**：
 
 ```
-https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.4
+https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.5
 ```
 
 也支持直接填 GitHub 仓库地址 `https://github.com/qingshuiliuyun/dsh-node-monitor`（会拉默认分支）。
 
 ### 方式 B：本地目录（离线包）
 
-解压 `dsh-node-monitor-0.6.4.zip`，在「添加插件」里填解压后的目录绝对路径，或在 profile 里用：
+解压 `dsh-node-monitor-0.6.5.zip`，在「添加插件」里填解压后的目录绝对路径，或在 profile 里用：
 
 ```
 dsh plugin add /绝对路径/dsh-node-monitor
@@ -123,7 +125,7 @@ dsh plugin add /绝对路径/dsh-node-monitor
 
 ### 3. 没有服务器：接入码 + 虚拟局域网 / IPv6
 
-1. 两台都装 v0.6.4 并重启。
+1. 两台都装 v0.6.5 并重启。
 2. A：「本机配对信息」→「接入码」→ 选一个本机地址（局域网 IP / Tailscale 100.x / IPv6）。
 3. 复制接入链接（或让对方扫二维码）。
 4. B：「添加节点」→ 把链接粘贴到**节点地址**输入框 → 地址和令牌自动填好 → 保存。
@@ -218,7 +220,9 @@ UDP 发现：45871，组播 `239.255.43.21`，30s 一次，TTL 5 分钟，字段
 | [DESIGN.md](DESIGN.md) | 总体架构、数据模型、协议规格、安全模型、部署与测试 |
 | [docs/INSTALL.md](docs/INSTALL.md) | 分场景安装、端口/防火墙、升级回滚、排障 |
 | [docs/SECURITY.md](docs/SECURITY.md) | 威胁模型、令牌矩阵、数据暴露面、加固清单 |
+| [docs/ARCHITECTURE-DECISIONS.md](docs/ARCHITECTURE-DECISIONS.md) | 架构决策记录（ADR）：取舍与备选方案 |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | 版本历史 |
+| [README.en.md](README.en.md) | English README |
 | [docs/screenshots/](docs/screenshots) | 界面截图（v0.6.x） |
 | [market/PUBLISH.md](market/PUBLISH.md) | 插件市场提交说明 |
 
