@@ -691,3 +691,7 @@ PC (NAT 后) ──POST /hub/push（Bearer 加入令牌，每 3s）──▶ 服
 - core：`encodeNodeLink`/`parseNodeLink`（IPv4/IPv6、错误片段、版本）。
 - host：`nodeInvite` 返回候选地址、链接可解析且令牌匹配、可指定 address；双栈监听由实机 `ss -lntp` 验证为 `*:45873`。
 - 实机：A 生成接入链接 → B 粘贴 → 自动填 `http://172.18.0.7:45873` + 令牌 → 保存后节点在线，0 console error。
+
+### 12.6 与 Hub 模式组合
+
+agent 服务同时注册了 `hub/push` 与 `hub/result`，因此「远程主节点」的地址可以填 `http://<虚拟IP>:45873`：客户端只走插件端口，不触发 DSH 的登录与 Host 校验，适合 Tailscale / ZeroTier / IPv6 直连场景；实机以 `POST :45873/node-monitor/api/v1/hub/push` 验证返回 `{ok:true,commands:[]}`。
