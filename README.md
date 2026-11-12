@@ -1,5 +1,7 @@
 # dsh-node-monitor
 
+> 仓库：<https://github.com/qingshuiliuyun/dsh-node-monitor> · 安装包见 `dsh-node-monitor-dist/` 或 Releases。
+
 多 DSH 节点互联监控插件：在**左侧栏固定入口**打开统一面板，查看 Windows PC、云服务器、手机与浏览器上每一个 DSH 实例的在线状态、会话/任务负载、指标、日志摘要与告警，并可做基础管理。
 
 - 总览：节点卡片、健康度、在线/异常/离线统计、告警、最近活动
@@ -80,7 +82,7 @@ Hub 的移动端视图（390×844）：
 
 | 项目 | 结果 |
 | --- | --- |
-| 自动化测试 | `npm test` → **34/34** 通过（24 单测 + 10 集成，含真实 `node:http` 往返、加载安全、登录材料/一次性票据、控制面 dry-run/confirm/审计、批量操作用例） |
+| 自动化测试 | `npm test` → **38/38** 通过（27 单测 + 11 集成，含真实 `node:http` 往返、加载安全、登录材料/一次性票据、控制面 dry-run/confirm/审计、批量操作、局域网发现报文与令牌轮换用例） |
 | 安装 | `plugin_manager install_bundle` → `applied`，profile 增加 link 依赖与 bundle 条目 |
 | 节点端点 | `GET /node-monitor/api/v1/health` → `200 {"ok":true,"protocol":"dsh.node-monitor/1","name":"dsh-node-monitor"}`；`/status` 无 Bearer → `401` |
 | 落盘权限 | `~/.dsh/node-monitor/secrets.json`、`state.json` 均为 `0600`，`state.json` 内不含任何令牌 |
@@ -151,7 +153,7 @@ dsh plugin add /root/dsh_workspace/dsh-node-monitor
 4. 回到面板 → 「添加节点」：填名称与地址（如 `https://node2.example.com`，不要带查询串/账号密码），适配器选「DSH」，粘贴令牌，点「测试连接」确认后保存。
 5. 令牌轮换：更新远端环境变量/密钥文件后，在面板编辑该节点并填入新令牌即可。
 
-## 多机集中管控 Hub（v0.3.0）
+## 多机集中管控 Hub（v0.4.0）
 
 v0.2.0 起，本插件除了「看状态」，还可以作为多机入口：**不在 Hub 里重写聊天**，而是把每台节点的真实 DSH 界面直接打开。这样会话、任务、工具全部走节点自己的 DSH，Hub 只负责入口与状态，协议零维护。
 

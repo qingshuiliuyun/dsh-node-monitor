@@ -1,29 +1,37 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  BATCH_OPS,
-  PROTOCOL,
   AGENT_STATUS_PATH,
+  BATCH_OPS,
+  DISCOVERY_PROTOCOL,
+  DISCOVERY_TTL_MS,
+  PROTOCOL,
   adaptAgentStatus,
   adaptGenericStatus,
   appendEvent,
-  classifyProbe,
+  buildAnnouncement,
   clampSettings,
+  classifyProbe,
   compareTokens,
   computeAlerts,
+  discoveryAddress,
   emptySnapshot,
   formatMetrics,
   fromPersistedState,
   generateAgentToken,
+  generatePairingToken,
   jsonSafe,
   maskLogin,
-  parseLoginUrl,
+  mergeDiscovery,
   normalizeBaseUrl,
+  parseAnnouncement,
+  parseLoginUrl,
   probeEndpoint,
   probeRecordFromOutcome,
   probeTarget,
   sanitizeSessionList,
   sanitizeSnapshot,
+  shortNodeId,
   summarize,
   toPersistedState,
   validateBatchRequest,
@@ -500,4 +508,46 @@ test('批量请求：白名单、去重、上限与空选拒绝', () => {
   const trimmed = validateBatchRequest({ op: 'disable', ids: ['x'.repeat(200)] })
   assert.equal(trimmed.ok, true)
   assert.equal(trimmed.value.ids[0].length <= 81, true)
+})
+
+test('发现报文：公开身份可解析、自身/公网来源/过期被拒、标签净化', () => {
+  const self = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+  const payload = buildAnnouncement({ id: '11111111-2222-3333-4444-555555555555', label: ' 同事 A  ', port: 3081, hostname: 'pc-a', version: '0.4.0', path: '/' })
+  const parsed = parseAnnouncement(Buffer.from(JSON.stringify(payload)), { selfId: self, address: '192.168.1.9' })
+  assert.equal(parsed.ok, true)
+  assert.equal(parsed.value.label, '同事 A')
+  assert.equal(parsed.value.address, '192.168.1.9')
+  assert.equal(parsed.value.port, 3081)
+
+  assert.equal(parseAnnouncement(JSON.stringify(payload), { selfId: payload.id, address: '192.168.1.9' }).error.code, 'discovery-self')
+  assert.equal(parseAnnouncement(JSON.stringify(payload), { selfId: self, address: '8.8.8.8' }).error.code, 'discovery-bad-address')
+  assert.equal(parseAnnouncement(JSON.stringify({ ...payload, ts: Date.now() - 10 * 60_000 }), { selfId: self, address: '10.0.0.2' }).error.code, 'discovery-stale')
+  assert.equal(parseAnnouncement(JSON.stringify({ ...payload, m: 'x' }), { selfId: self, address: '10.0.0.2' }).error.code, 'discovery-bad-protocol')
+  assert.equal(parseAnnouncement('not json', { selfId: self, address: '10.0.0.2' }).error.code, 'discovery-bad-json')
+  assert.equal(parseAnnouncement(JSON.stringify({ ...payload, id: '' }), { selfId: self, address: '10.0.0.2' }).ok, false)
+})
+
+test('发现条目合并：按 id 去重、刷新 lastSeen、剔除过期、地址格式化', () => {
+  const now = Date.now()
+  const entry = { id: 'n1', label: 'A', address: '192.168.1.9', port: 3081, path: '/', lastSeen: now }
+  let list = mergeDiscovery([], entry, now)
+  assert.equal(list.length, 1)
+  list = mergeDiscovery(list, { ...entry, label: 'A2', lastSeen: now + 10 }, now + 10)
+  assert.equal(list.length, 1)
+  assert.equal(list[0].label, 'A2')
+  list = mergeDiscovery(list, { id: 'n2', address: '192.168.1.10', port: 3082, path: '/x', lastSeen: now }, now)
+  assert.equal(list.length, 2)
+  const second = list.find((item) => item.id === 'n2')
+  assert.equal(discoveryAddress(second), 'http://192.168.1.10:3082/x')
+  const later = now + 2 * DISCOVERY_TTL_MS + 1
+  const stale = mergeDiscovery(list, { id: 'n3', address: '192.168.1.11', port: 3081, path: '/', lastSeen: later }, later)
+  assert.equal(stale.length, 1)
+  assert.equal(shortNodeId('aaaa-bbbb-cccc'), 'AAAABBBB')
+})
+
+test('配对令牌：可人工朗读，格式 XXXX-XXXX-XXXX 且不重复', () => {
+  const first = generatePairingToken()
+  const second = generatePairingToken()
+  assert.match(first, /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/)
+  assert.notEqual(first, second)
 })

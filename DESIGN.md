@@ -537,3 +537,51 @@ cd /root/dsh_workspace/dsh-node-monitor && npm test
 - 分组即节点 `tags`；总览筛选条支持关键词（名称/地址）、状态、分组三条件，显示「筛选结果 / 总数」，移动端换行。
 - 卡片显示最多 2 个标签；未确认告警行提供「打开节点」直达详情。
 - 批量操作（v0.3.1）：Hub RPC `batchNodes {op, ids}`（owner-only），`op ∈ enable/disable/probe`，ids 去重、单次 ≤64；`probe` 并发探测所选节点并重算告警，`enable/disable` 直接改节点「是否纳入监控」并落盘（停用节点不再周期探测、不产生新告警），三者都会写事件流；客户端勾选卡片 → 批量栏（全选当前沿用筛选结果）→ 操作完成后清空选择。
+## 10. 局域网自动发现（v0.4.0）
+
+### 10.1 目标与边界
+
+- 目标：同一广播域内免手输地址接入；通过「令牌」确认机器归属，而不是靠名字猜测。
+- 边界：只做“发现 + 提示”，不做自动接入；广播不含任何秘密；跨网段/跨 NAT 不依赖此机制。
+
+### 10.2 协议
+
+| 项 | 值 |
+|---|---|
+| 传输 | UDP，端口 `45871`（可 `discoveryPort` / `DSH_NODE_MONITOR_DISCOVERY_PORT` 覆盖） |
+| 目标 | 组播 `239.255.43.21` + 受限广播 `255.255.255.255` + `127.0.0.1`（本机联调） |
+| 报文 | JSON：`{m:'dsh-node-monitor/discovery/1', v:1, id, label, port, host, version, path, ts}` |
+| 频率 | 启动时一次 + 每 30s 一次；接收方 TTL 5 分钟，自动过期 |
+| 单播补充 | `DSH_NODE_MONITOR_DISCOVERY_PEERS=host:port,...`，用于本机多实例/特殊网络验证 |
+
+接收方校验：协议/节点 id/来源地址（必须是 RFC1918、链路本地或回环）/时间戳；地址一律取自 UDP 来源（`rinfo.address`），不信任报文自述；自身 id 直接忽略；按 id 去重、最多 32 条。
+
+### 10.3 数据流
+
+1. 节点 A 启动 → `startDiscovery()` 绑定 UDP → `announceDiscovery()` 广播身份；
+2. 节点 B 收到 → `parseAnnouncement()` 校验 → `mergeDiscovery()` 存入内存（不落盘）；
+3. B 面板轮询 `state` 时读到 `discovery.nodes`（含 `address/label/shortId/version/lastSeen/added`）；
+4. 用户点「接入」→ 前端用发现到的地址预填「添加节点」→ 粘贴 A 的令牌 → `addNode` → 后续走既有 Bearer HTTP 探测。
+
+### 10.4 RPC 增量
+
+| 端点 | 语义 |
+|---|---|
+| `discoveryProbe` | 立即广播一次并返回最新 state |
+| `selfToken` | 返回本机节点 ID/名称/令牌（owner-only，仅显式调用时返回，默认界面掩码） |
+| `rotateToken` | 重新生成 12 位易读令牌（需 `confirm:true`），写回 `secrets.json` 0600 |
+| `updateLabel` | 修改显示名称（≤40 字符），立即广播新名字 |
+
+### 10.5 安全取舍
+
+- 广播即“公开喊话”，同网段任何人都能看到节点名与地址——这是有意的可见性；令牌才是准入凭证。
+- 令牌默认掩码，显示需 owner 点击；渲染层不写日志；`state` 与发现报文都不含令牌。
+- 旋转令牌会立即让旧接入方 401，适合“离职/换机/怀疑泄露”场景。
+- 公司多人场景：每个人用自己的显示名 + 自己的令牌；Hub 只是观察台，令牌由各人自己保管。
+
+### 10.6 已知限制
+
+- 广播被部分企业 WiFi / 访客网络 / AP 隔离拦截时发现列表为空，可退回手动添加或用 `DISCOVERY_PEERS` 单播；
+- 双实例同机验证需给每个实例不同的 `discoveryPort`，否则 UDP 端口复用后只有部分报文可达；
+- 跨网段不会自动发现，仍需 Tailscale / frp / Cloudflare Tunnel 等组网。
+

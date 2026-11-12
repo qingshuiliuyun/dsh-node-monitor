@@ -1,17 +1,17 @@
 # PR: add dsh-node-monitor
 
-Title: `add: OWNER/dsh-node-monitor`
+Title: `add: qingshuiliuyun/dsh-node-monitor`
 
-File: `data/plugins/OWNER__dsh-node-monitor.yml`
+File: `data/plugins/qingshuiliuyun__dsh-node-monitor.yml`
 
 ```yaml
-url: https://github.com/OWNER/dsh-node-monitor
-name: OWNER/dsh-node-monitor
+url: https://github.com/qingshuiliuyun/dsh-node-monitor
+name: qingshuiliuyun/dsh-node-monitor
 category: remote
 description:
   en: 'Multi-node DSH monitor and control hub: status, read-only sessions, one-click/embedded real DSH UI, plugin toggles and restart (dry-run + audit), filters and batch operations.'
   zh: '多 DSH 节点监控与集中管控：状态总览、只读会话、一键/内嵌打开真实 DSH、插件启停与重启（dry-run + 审计）、筛选与批量操作。'
-icon: https://raw.githubusercontent.com/OWNER/dsh-node-monitor/main/icon.svg
+icon: https://raw.githubusercontent.com/qingshuiliuyun/dsh-node-monitor/main/icon.svg
 ```
 
 Body:

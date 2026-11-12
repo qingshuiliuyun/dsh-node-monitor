@@ -1,10 +1,12 @@
+process.env.DSH_NODE_MONITOR_DISCOVERY = '0'
+
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { NodeMonitorHost, apply } from '../lib/index.js'
-import { AGENT_HEALTH_PATH, AGENT_STATUS_PATH, CONTROL_PATH, OPEN_PATH, PROTOCOL, RPC_CHANNEL } from '../lib/core.js'
+import { AGENT_HEALTH_PATH, AGENT_STATUS_PATH, CONTROL_PATH, OPEN_PATH, PROTOCOL, RPC_CHANNEL, buildAnnouncement } from '../lib/core.js'
 
 const owner = { principal: { kind: 'owner' } }
 const browser = { principal: { kind: 'browser' } }
@@ -648,4 +650,61 @@ test('宿主：批量探测/启用/停用与权限、空选与上限拒绝', asy
     await host.dispose()
     await fsp.rm(home, { recursive: true, force: true })
   }
+})
+
+test('局域网发现：只接收公开身份、来源地址优先、接入后标记 added、自身被忽略', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-discovery-'))
+  const { ctx, rpc, cleanups } = fakeContext('http://127.0.0.1:3996')
+  const host = new NodeMonitorHost(ctx, { home, discovery: true })
+  await host.loadState()
+  const peer = JSON.stringify(
+    buildAnnouncement({
+      id: '11111111-2222-3333-4444-555555555555',
+      label: '同事-A 的笔记本',
+      port: 3081,
+      hostname: 'pc-a',
+      version: '0.4.0',
+      path: '/'
+    })
+  )
+  host.handleDiscoveryPacket(peer, { address: '192.168.1.9' })
+  let snap = host.discoverySnapshot()
+  assert.equal(snap.nodes.length, 1)
+  assert.equal(snap.nodes[0].label, '同事-A 的笔记本')
+  assert.equal(snap.nodes[0].address, 'http://192.168.1.9:3081')
+  assert.equal(snap.nodes[0].shortId, '11111111')
+  assert.equal(snap.nodes[0].added, false)
+  assert.equal(JSON.stringify(snap).includes('token'), false)
+
+  // 公网来源地址直接丢弃，不进入发现列表
+  host.handleDiscoveryPacket(peer, { address: '8.8.8.8' })
+  assert.equal(host.discoverySnapshot().nodes.length, 1)
+  // 自身 id 被忽略
+  host.handleDiscoveryPacket(JSON.stringify({ ...JSON.parse(peer), id: host.secrets.nodeId }), { address: '192.168.1.9' })
+  assert.equal(host.discoverySnapshot().nodes.length, 1)
+  // 已按地址接入的节点标记 added
+  host.nodes = [...host.nodes, { id: 'n-manual', name: 'A', baseUrl: 'http://192.168.1.9:3081', tags: [] }]
+  snap = host.discoverySnapshot()
+  assert.equal(snap.nodes[0].added, true)
+
+  // 令牌只在显式 selfToken 调用中返回，且必须 owner
+  const denied = await host.handleRpc('selfToken', {}, null, browser)
+  assert.equal(denied.ok, false)
+  assert.equal(denied.error.code, 'node-monitor/forbidden')
+  const info = await host.handleRpc('selfToken', {}, null, owner)
+  assert.equal(info.ok, true)
+  assert.equal(info.value.token, host.secrets.agentToken)
+  assert.equal(info.value.shortId, host.secrets.nodeId.replace(/-/g, '').slice(0, 8).toUpperCase())
+
+  // 轮换令牌需要 confirm 且会写回 secrets.json（0600）
+  const noConfirm = await host.handleRpc('rotateToken', {}, null, owner)
+  assert.equal(noConfirm.ok, false)
+  const rotated = await host.handleRpc('rotateToken', { confirm: true }, null, owner)
+  assert.equal(rotated.ok, true)
+  assert.notEqual(rotated.value.token, info.value.token)
+  const saved = JSON.parse(await fsp.readFile(path.join(home, 'node-monitor', 'secrets.json'), 'utf8'))
+  assert.equal(saved.agentToken, rotated.value.token)
+
+  for (const cleanup of cleanups) await cleanup()
+  await fsp.rm(home, { recursive: true, force: true })
 })

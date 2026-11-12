@@ -61,6 +61,7 @@ dsh --profile web --host 100.101.102.103 --port 3081
 ```
 
 - Windows 首次运行放行防火墙（或手动放行 TCP 3081 / 你选的端口）；
+- 若要用「局域网自动发现」，还需放行 **UDP 45871**（入站）；不想开也能手动添加节点；
 - 启动日志会打印 `dsh web: http://<host>:<port>/?token=...`，用这个地址打开本机 GUI；
 - 验证从另一台机器可访问：`curl http://<IP>:3081/node-monitor/api/v1/health` 应返回 `200`。
 
@@ -140,3 +141,13 @@ $env:DSH_NODE_MONITOR_ALLOW_CONTROL="1"; dsh --profile web --host <IP> --port 30
 1. 从 profile `package.json` 的 `dsh.profile.bundles` 删除 `dsh-node-monitor`，并删除对应 `dependencies`；
 2. 重启 DSH；
 3. 可选：删除 `~/.dsh/node-monitor/`（含令牌与历史，删除前备份）。
+
+## 局域网自动发现（可选，v0.4.0+）
+
+同一 WiFi / 同一网段下：
+
+1. 两台都按上面的方式用 `--host <局域网IP>` 启动；
+2. 任一台打开「节点监控」→「本机配对信息」→ 点「显示」查看连接令牌（可「重新生成」为 `XXXX-XXXX-XXXX` 易读格式，可「改名」成自己的机器名）；
+3. 另一台在同面板「局域网发现」里看到对方 →「接入」→ 粘贴令牌 → 保存。
+
+说明：广播只含名称/地址/端口/版本/节点 ID，不含令牌；接入必须拿到对方令牌；发现仅同一广播域有效，跨网请用 Tailscale 或 frp。若企业 WiFi 拦截广播，可退回「添加节点」手填地址。
