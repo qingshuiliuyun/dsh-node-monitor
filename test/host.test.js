@@ -1,4 +1,6 @@
 process.env.DSH_NODE_MONITOR_DISCOVERY = '0'
+process.env.DSH_NODE_MONITOR_PUBLIC_LISTEN = '0'
+process.env.DSH_NODE_MONITOR_AUTO_PAIR = '0'
 
 import test from 'node:test'
 import assert from 'node:assert/strict'

@@ -585,3 +585,13 @@ cd /root/dsh_workspace/dsh-node-monitor && npm test
 - 双实例同机验证需给每个实例不同的 `discoveryPort`，否则 UDP 端口复用后只有部分报文可达；
 - 跨网段不会自动发现，仍需 Tailscale / frp / Cloudflare Tunnel 等组网。
 
+
+### 10.7 全自动组网（v0.5.0）
+
+目标：用户只装插件，不再做任何配置。
+
+- **自监听**：宿主额外 `http.createServer` 监听 `0.0.0.0:45873`（`DSH_NODE_MONITOR_AGENT_PORT` 可改），对外提供 `status/health/pair/control` 四个端点；这样对端无需 DSH `--host`，DSH 原 3081 端口保持只绑回环。
+- **互认**：UDP 广播新增 `ap`（agent 端口）；收到广播后宿主自动 `POST http://<ip>:<ap>/node-monitor/api/v1/pair`（请求体带 `auto:true`），对端在 `autoPair` 开启时接受局域网请求并回传自己的令牌，双方自动写节点（`tags: paired,auto`，baseUrl 用 agent 端口）。
+- **默认值**：`publicListen=true`、`autoPair=true`、`allowControl` 在自动组网模式下默认开启（仍有 dry-run/confirm/audit，可 `DSH_NODE_MONITOR_ALLOW_CONTROL=0` 关闭）；`allowRestart` 仍默认关闭。
+- **安全边界**：只在局域网/回环生效；仅自动组网信任同一广播域；跨网段仍需 Tailscale/frp；自动节点不提供「打开完整 DSH 界面」（那需要 DSH 登录令牌，插件无法自动获取）。
+- **测试**：40 项全过；双实例（3093/3092，agentPort 45873/45874）零手工操作下双方 state 各自出现对端 `paired,auto` 节点。
