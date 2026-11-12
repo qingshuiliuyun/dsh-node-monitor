@@ -10,6 +10,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { NodeMonitorHost, apply } from '../lib/index.js'
 import { AGENT_HEALTH_PATH, AGENT_STATUS_PATH, CONTROL_PATH, HUB_PUSH_PATH, HUB_RESULT_PATH, OPEN_PATH, PAIR_PATH, PROTOCOL, RPC_CHANNEL, buildAnnouncement } from '../lib/core.js'
+import { parseNodeLink } from '../lib/core.js'
 
 const owner = { principal: { kind: 'owner' } }
 const browser = { principal: { kind: 'browser' } }
@@ -830,6 +831,32 @@ test('添加节点留空名称时自动取远端 hostname，并把本机登记�
   }
 })
 
+
+test('节点接入码：返回多个本机地址与可解析的接入链接', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-invite-'))
+  const { ctx, cleanups } = fakeContext('http://127.0.0.1:3994')
+  const host = new NodeMonitorHost(ctx, { home })
+  try {
+    await host.start()
+    await delay(30)
+    const info = await host.handleRpc('nodeInvite', {}, null, owner)
+    assert.equal(info.ok, true)
+    assert.ok(Array.isArray(info.value.addresses) && info.value.addresses.length >= 1)
+    assert.match(info.value.address, /^http:\/\/\[?/)
+    assert.match(info.value.link, /#node-monitor-add=/)
+    assert.match(info.value.svg, /^<svg/)
+    const parsed = parseNodeLink(info.value.link)
+    assert.equal(parsed.ok, true)
+    assert.equal(parsed.value.baseUrl, info.value.address)
+    assert.equal(parsed.value.token, host.secrets.agentToken)
+    const v4 = info.value.addresses.find((item) => item.family === 4)
+    const chosen = await host.handleRpc('nodeInvite', { address: v4.url }, null, owner)
+    assert.equal(chosen.value.address, v4.url)
+  } finally {
+    await host.dispose()
+    for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
+  }
+})
 
 test('加入链接与二维码：owner 可生成，令牌只在 # 片段', async () => {
   const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-join-'))

@@ -660,3 +660,34 @@ PC (NAT 后) ──POST /hub/push（Bearer 加入令牌，每 3s）──▶ 服
 - core：`encodeJoinLink`/`parseJoinLink`（含非法协议、缺令牌、路径保留）。
 - host：owner 可生成 `hubJoin`（link 含令牌、svg 以 `<svg` 开头、`publicUrl` 生效），非 owner 403。
 - 实机：Hub 生成链接→剪贴板内容与面板一致；二维码截图用 `jsQR` 解码回原文；客户端粘贴链接后地址/令牌自动填充并连接成功，0 console error。
+
+## 12. 无服务器接入码（v0.6.2）
+
+### 12.1 目标
+
+没有公网服务器时，让任意一台电脑作为被查看端，另一台粘贴一条链接即可接入；链路复用 agent 端口（`45873`），不依赖 DSH 的 `--host` 与登录态。
+
+### 12.2 地址枚举
+
+宿主遍历 `os.networkInterfaces()`，排除 internal，输出 `{url, family, iface}`：
+- IPv4：`http://<ip>:<agentPort>`
+- IPv6：`http://[<ip>]:<agentPort>`（去掉 `%scope`）
+
+无任何非回环地址时回退 `http://127.0.0.1:<agentPort>`。对应 Tailscale（100.x）、ZeroTier（10.x/172.x）、局域网、IPv6 都能被枚举到。
+
+### 12.3 接入链接
+
+- 格式：`<dsnOrigin>/#node-monitor-add=<base64url(JSON{v:1,u,t})>`，`u` 为 agent 地址，`t` 为节点令牌。
+- 生成：`nodeInvite` RPC（owner-only），可传 `address` 指定候选；同时返回二维码 SVG（复用 `hubJoin` 的本地 QR 生成）。
+- 解析：`core.parseNodeLink` 校验 http(s)、版本、令牌长度；客户端在「节点地址」输入框 `onChange` 检测到 `#node-monitor-add=` 时自动填入地址与令牌（仍需点保存）。
+- 安全：链接含令牌，等同节点令牌；只经 `#` 片段传递，不进入 HTTP 请求与访问日志。
+
+### 12.4 IPv6 双栈
+
+`startAgentServer()` 使用 `listen({port, host:'::', ipv6Only:false})`；若系统不支持则通过 `error` 分支回退到 `0.0.0.0`。IPv6 直连时 URL 必须带方括号。
+
+### 12.5 测试
+
+- core：`encodeNodeLink`/`parseNodeLink`（IPv4/IPv6、错误片段、版本）。
+- host：`nodeInvite` 返回候选地址、链接可解析且令牌匹配、可指定 address；双栈监听由实机 `ss -lntp` 验证为 `*:45873`。
+- 实机：A 生成接入链接 → B 粘贴 → 自动填 `http://172.18.0.7:45873` + 令牌 → 保存后节点在线，0 console error。

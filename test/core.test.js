@@ -17,6 +17,8 @@ import {
   discoveryAddress,
   emptySnapshot,
   encodeJoinLink,
+  encodeNodeLink,
+  parseNodeLink,
   parseJoinLink,
   formatMetrics,
   fromPersistedState,
@@ -570,4 +572,17 @@ test('加入链接：生成与解析都只在 # 片段里携带令牌', () => {
   assert.equal(encodeJoinLink('https://a.test', 'short'), '')
   const withPath = parseJoinLink('https://a.test/dsh/#node-monitor-join=AAAABBBBCCCC')
   assert.equal(withPath.value.origin, 'https://a.test/dsh')
+})
+
+test('节点接入链接：带 agent 地址与令牌，粘贴即添加', () => {
+  const link = encodeNodeLink('http://hub.test', 'http://100.64.0.5:45873', 'ABCD-EFGH-IJKL')
+  assert.match(link, /^http:\/\/hub\.test\/#node-monitor-add=/)
+  const parsed = parseNodeLink(link)
+  assert.equal(parsed.ok, true)
+  assert.equal(parsed.value.baseUrl, 'http://100.64.0.5:45873')
+  assert.equal(parsed.value.token, 'ABCD-EFGH-IJKL')
+  const v6 = parseNodeLink(encodeNodeLink('http://hub.test', 'http://[2408:1::5]:45873', 'ABCD-EFGH-IJKL'))
+  assert.equal(v6.value.baseUrl, 'http://[2408:1::5]:45873')
+  assert.equal(parseNodeLink('http://hub.test/#node-monitor-join=ABC').ok, false)
+  assert.equal(parseNodeLink('http://hub.test/#node-monitor-add=%%%').ok, false)
 })
