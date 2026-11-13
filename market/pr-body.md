@@ -13,7 +13,7 @@ Adds `dsh-node-monitor` — a bundle plugin that puts a 「节点监控」 entry
 
 - [x] One file added: `data/plugins/qingshuiliuyun__dsh-node-monitor.yml`
 - [x] `package.json` declares `dsh.bundle.patch` and `dsh.client` (platform: web); the host half imports no other client packages
-- [x] Real working code: 38/38 tests (`node --test`), verified across multiple real DSH instances (two-instance dashboard, token pairing, control dry-run + live toggle, LAN discovery)
+- [x] Real working code: 50/50 tests (`node --test`), verified across multiple real DSH instances (two-instance dashboard, token pairing, control dry-run + live toggle, LAN discovery)
 - [x] Repo topic `dsh-plugin` (set by this submission script)
-- [ ] Repo age: created 2026-11-12T11:15:31Z — the one-day gate clears on 2026-11-13T11:15:31Z and CI should re-run itself
+- [x] Repo age: created 2026-11-12T11:15:31Z (over 24 hours at submission)
 - [x] `category: remote` — it is remote multi-node monitoring/control
