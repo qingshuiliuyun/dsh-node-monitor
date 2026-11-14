@@ -9,7 +9,7 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { NodeMonitorHost, apply } from '../lib/index.js'
-import { AGENT_HEALTH_PATH, AGENT_STATUS_PATH, CONTROL_PATH, HUB_PUSH_PATH, HUB_RESULT_PATH, OPEN_PATH, PAIR_PATH, PROTOCOL, RPC_CHANNEL, buildAnnouncement } from '../lib/core.js'
+import { AGENT_HEALTH_PATH, AGENT_STATUS_PATH, CONTROL_PATH, DIAGNOSE_PATH, HUB_PUSH_PATH, HUB_RESULT_PATH, OPEN_PATH, PAIR_PATH, PROTOCOL, RPC_CHANNEL, buildAnnouncement } from '../lib/core.js'
 import { parseNodeLink } from '../lib/core.js'
 
 const owner = { principal: { kind: 'owner' } }
@@ -268,6 +268,42 @@ test('宿主：agent 端点鉴权、健康检查与快照契约', async () => {
     await routes.get(AGENT_HEALTH_PATH)(mockReq(''), health)
     assert.equal(health.statusCode, 200)
     assert.equal(health.json().name, 'dsh-node-monitor')
+
+    // 诊断端点：只读令牌 403，完整令牌 200，且不返回任何令牌/会话内容。
+    const diagnose = routes.get(DIAGNOSE_PATH)
+    const diagReadonly = mockRes()
+    await diagnose(mockReq(host.secrets.statusToken), diagReadonly)
+    assert.equal(diagReadonly.statusCode, 403)
+    const diag = mockRes()
+    await diagnose(mockReq(host.secrets.agentToken), diag)
+    assert.equal(diag.statusCode, 200)
+    const info = diag.json()
+    assert.equal(info.version, '0.6.7')
+    assert.equal(typeof info.memory.heapUsed, 'number')
+    assert.equal(typeof info.uptimeSec, 'number')
+    assert.equal(info.nodes, 1)
+    assert.equal(JSON.stringify(info).includes(host.secrets.agentToken), false)
+    assert.equal(JSON.stringify(info).includes(host.secrets.statusToken), false)
+  } finally {
+    for (const cleanup of cleanups) cleanup()
+    await fsp.rm(home, { recursive: true, force: true })
+  }
+})
+
+test('宿主：同一地址重复添加会合并为同一个节点', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-dup-'))
+  const { ctx, cleanups } = fakeContext('http://127.0.0.1:3997')
+  const host = new NodeMonitorHost(ctx, { home })
+  try {
+    await host.start()
+    host.settings.timeoutMs = 400
+    const first = await host.addNode({ name: 'one', baseUrl: 'http://127.0.0.1:9', adapter: 'generic', token: 'tok-a' })
+    assert.equal(first.nodes.length, 2) // self + 1
+    const again = await host.addNode({ name: 'two', baseUrl: 'http://127.0.0.1:9/', adapter: 'generic', token: 'tok-b' })
+    assert.equal(again.nodes.length, 2)
+    const merged = again.nodes.find((node) => node.baseUrl === 'http://127.0.0.1:9')
+    assert.equal(merged.name, 'two')
+    assert.equal(host.secrets.nodeTokens[merged.id], 'tok-b')
   } finally {
     for (const cleanup of cleanups) cleanup()
     await fsp.rm(home, { recursive: true, force: true })

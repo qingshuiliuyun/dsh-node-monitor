@@ -27,8 +27,8 @@ Body:
 > - Opens a node's real DSH UI: one-click tokenized redirect, or same-site iframe; cross-site degrades to a new tab.
 > - Optional DSH-layer ops (disabled by default): list/toggle plugins and restart, `dryRun` default, `confirm` required, JSONL audit at `~/.dsh/node-monitor/audit.jsonl` (0600).
 > - Filters, tags, alert deep links and batch probe/enable/disable.
-> - `package.json` declares `dsh.bundle.patch` + `dsh.client` (platform: web); host half never imports other client packages; tests 50/50 (`node --test`), verified across two real DSH instances.
-- Security hardening (v0.6.6): auto-pair rate limits + auto-node cap, hub command results bound to `nodeId`, http(s)-only `publicUrl`, join/invite link validation, QR SVG whitelist, periodic cleanup of counters/queues.
+> - `package.json` declares `dsh.bundle.patch` + `dsh.client` (platform: web); host half never imports other client packages; tests 51/51 (`node --test`), verified across two real DSH instances.
+- Security hardening (v0.6.6–v0.6.7): auto-pair rate limits + auto-node cap, hub command results bound to `nodeId`, http(s)-only `publicUrl`, join/invite link validation, QR SVG whitelist, periodic cleanup of counters/queues.
 - Docs: `README.md` / `README.en.md`, `DESIGN.md`, `docs/SECURITY.md`, `docs/CHANGELOG.md`, `docs/ARCHITECTURE-DECISIONS.md`, `docs/INSTALL.md`.
 
 Checklist:

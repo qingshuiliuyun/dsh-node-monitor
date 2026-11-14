@@ -12,9 +12,9 @@ English | [简体中文](README.md)
 - Ops control is off by default; read-only tokens, dry-run, confirmation, audit log and rate limits
 
 Repository: <https://github.com/qingshuiliuyun/dsh-node-monitor>  
-Current version: **v0.6.6** (2026-11-12)  
-Tests: `npm test` → **50/50** (30 unit + 20 integration)  
-Packages: `dsh-node-monitor-dist/dsh-node-monitor-0.6.6.zip` / `.tgz`, or GitHub tag `v0.6.4`
+Current version: **v0.6.7** (2026-11-14)  
+Tests: `npm test` → **51/51** (30 unit + 21 integration)  
+Packages: `dsh-node-monitor-dist/dsh-node-monitor-0.6.7.zip` / `.tgz`, or GitHub tag `v0.6.7`
 
 ---
 
@@ -73,14 +73,14 @@ Four typical topologies:
 DSH → **Plugins** → **Add plugin** → paste one of the URLs below → install → **restart DSH**:
 
 ```
-https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.6
+https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.7
 ```
 
 The repository URL `https://github.com/qingshuiliuyun/dsh-node-monitor` also works (default branch).
 
 ### Option B: local directory (offline package)
 
-Unpack `dsh-node-monitor-0.6.6.zip`, then either point "Add plugin" at the unpacked absolute path, or run:
+Unpack `dsh-node-monitor-0.6.7.zip`, then either point "Add plugin" at the unpacked absolute path, or run:
 
 ```
 dsh plugin add /absolute/path/dsh-node-monitor
@@ -125,7 +125,7 @@ Best when you have an always-on old PC, NAS or cloud server.
 
 ### 3. No server: invite links + virtual LAN / IPv6
 
-1. Install v0.6.6 on both machines and restart.
+1. Install v0.6.7 on both machines and restart.
 2. On A: **Local pairing info** → **Invite** → pick an address (LAN IP / Tailscale 100.x / IPv6).
 3. Copy the invite link (or let the other side scan the QR code).
 4. On B: **Add node** → paste the link into the **node address** field → address and token are filled in → save.
@@ -244,7 +244,7 @@ UDP discovery: 45871, multicast `239.255.43.21`, every 30s, 5-minute TTL; fields
 ## Development and tests
 
 ```bash
-npm test                 # 50/50
+npm test                 # 51/51
 node --test --test-force-exit test/core.test.js
 node --test --test-force-exit test/host.test.js
 ```
