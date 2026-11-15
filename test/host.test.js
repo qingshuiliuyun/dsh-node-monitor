@@ -9,7 +9,7 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { NodeMonitorHost, apply } from '../lib/index.js'
-import { AGENT_HEALTH_PATH, AGENT_STATUS_PATH, CONTROL_PATH, DIAGNOSE_PATH, HUB_PUSH_PATH, HUB_RESULT_PATH, HUB_RELAY_PATH, OPEN_PATH, PAIR_PATH, PROTOCOL, RPC_CHANNEL, buildAnnouncement } from '../lib/core.js'
+import { AGENT_HEALTH_PATH, AGENT_STATUS_PATH, BRIDGE_PUSH_PATH, BRIDGE_RELAY_PATH, CONTROL_PATH, DIAGNOSE_PATH, HUB_PUSH_PATH, HUB_RESULT_PATH, HUB_RELAY_PATH, OPEN_PATH, PAIR_PATH, PROTOCOL, RPC_CHANNEL, buildAnnouncement } from '../lib/core.js'
 import { parseNodeLink } from '../lib/core.js'
 
 const owner = { principal: { kind: 'owner' } }
@@ -280,7 +280,7 @@ test('宿主：agent 端点鉴权、健康检查与快照契约', async () => {
     await diagnose(mockReq(host.secrets.agentToken), diag)
     assert.equal(diag.statusCode, 200)
     const info = diag.json()
-    assert.equal(info.version, '0.8.0')
+    assert.equal(info.version, '0.9.0')
     assert.equal(typeof info.memory.heapUsed, 'number')
     assert.equal(typeof info.uptimeSec, 'number')
     assert.equal(info.nodes, 1)
@@ -1251,7 +1251,7 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
   const calls = []
   const pluginManager = {
     async listBundles() {
-      return [{ name: 'dsh-node-monitor', version: '0.8.0', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
+      return [{ name: 'dsh-node-monitor', version: '0.9.0', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
     },
     async installBundle(spec) {
       calls.push(spec)
@@ -1272,7 +1272,7 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
     assert.equal(info.ok, true)
     assert.equal(info.value.latest, '0.9.10')
     assert.equal(info.value.updateAvailable, true)
-    assert.equal(info.value.current, '0.8.0')
+    assert.equal(info.value.current, '0.9.0')
     assert.equal(info.value.install.linked, false)
 
     const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.9.10' }, undefined, owner)
@@ -1404,6 +1404,133 @@ test('统一主节点：PC 看到全网节点，并经主节点转发控制', as
   } finally {
     await host.dispose()
     await new Promise((resolve) => hub.close(resolve))
+    await fsp.rm(home, { recursive: true, force: true })
+  }
+})
+
+test('局域网桥接：Hub 侧给配对节点发桥接令牌，并接收其经桥接上报的状态', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-bridge-a-'))
+  const { ctx, routes, cleanups } = fakeContext('http://127.0.0.1:3995')
+  const host = new NodeMonitorHost(ctx, { home })
+  try {
+    await host.start()
+    await delay(50)
+    host.autoPair = true
+    const pair = routes.get(PAIR_PATH)
+    const bridgePush = routes.get(BRIDGE_PUSH_PATH)
+    assert.equal(typeof pair, 'function')
+    assert.equal(typeof bridgePush, 'function')
+
+    const pairRes = mockRes()
+    await pair(
+      {
+        method: 'POST',
+        socket: { remoteAddress: '::ffff:192.168.1.50' },
+        headers: { 'content-type': 'application/json' },
+        on(event, callback) {
+          if (event === 'data') callback(Buffer.from(JSON.stringify({ id: 'peer-bridge-1', label: 'LAN-PC', port: 3995, agentPort: 45874, token: 'b'.repeat(24), auto: true })))
+          if (event === 'end') callback()
+        }
+      },
+      pairRes
+    )
+    assert.equal(pairRes.statusCode, 200)
+    const bridgeToken = pairRes.json().bridgeToken
+    assert.equal(typeof bridgeToken, 'string')
+    assert.equal(pairRes.json().bridge.available, true)
+
+    const pushRes = mockRes()
+    await bridgePush(
+      {
+        method: 'POST',
+        socket: { remoteAddress: '::ffff:192.168.1.50' },
+        headers: { authorization: `Bearer ${bridgeToken}`, 'content-type': 'application/json' },
+        on(event, callback) {
+          if (event === 'data') callback(Buffer.from(JSON.stringify({ nodeId: 'peer-bridge-1', name: 'LAN-PC', hostname: 'lan-pc', version: '0.9.0', payload: { protocol: PROTOCOL, metrics: { cpuPct: 12, memPct: 30, diskFreePct: 50 } } })))
+          if (event === 'end') callback()
+        }
+      },
+      pushRes
+    )
+    assert.equal(pushRes.statusCode, 200)
+    assert.equal(pushRes.json().ok, true)
+    assert.equal(host.hubPeers.has('peer-bridge-1'), true)
+    assert.ok(host.hubPeerSummaries('').some((peer) => peer.nodeId === 'peer-bridge-1'))
+
+    const badRes = mockRes()
+    await bridgePush(
+      {
+        method: 'POST',
+        socket: { remoteAddress: '::ffff:192.168.1.50' },
+        headers: { authorization: 'Bearer nope', 'content-type': 'application/json' },
+        on(event, callback) {
+          if (event === 'data') callback(Buffer.from('{}'))
+          if (event === 'end') callback()
+        }
+      },
+      badRes
+    )
+    assert.equal(badRes.statusCode, 401)
+  } finally {
+    host.dispose()
+    for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
+    await fsp.rm(home, { recursive: true, force: true })
+  }
+})
+
+test('局域网桥接：未连 Hub 的节点经桥接节点上报并获得全网视图', async () => {
+  const calls = []
+  const server = http.createServer((req, res) => {
+    const chunks = []
+    req.on('data', (chunk) => chunks.push(chunk))
+    req.on('end', () => {
+      const body = Buffer.concat(chunks).toString('utf8')
+      calls.push({ url: req.url, auth: req.headers.authorization, body })
+      if (req.url === BRIDGE_PUSH_PATH) {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, peers: [{ nodeId: 'peer-9', name: 'Office-PC', role: 'peer', online: true, lastSeen: Date.now(), metrics: { cpuPct: 11, memPct: 22, diskFreePct: 33 }, sessions: { total: 1, running: 0 } }] }))
+        return
+      }
+      if (req.url === BRIDGE_RELAY_PATH) {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, value: { ok: true, value: { items: [{ id: 'plug-1' }] } } }))
+        return
+      }
+      res.writeHead(404, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ ok: false }))
+    })
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-bridge-b-'))
+  const { ctx, cleanups } = fakeContext('http://127.0.0.1:3994')
+  const host = new NodeMonitorHost(ctx, { home })
+  try {
+    await host.start()
+    await delay(50)
+    const node = await host.addNode({ name: 'Bridge-PC', baseUrl: `http://127.0.0.1:${port}`, adapter: 'dsh', token: 'a'.repeat(24) })
+    const local = host.nodes.find((item) => item.baseUrl === `http://127.0.0.1:${port}`)
+    assert.ok(local)
+    host.secrets.bridgeTokens[local.id] = 'bridge-secret'
+    host.hubLink = null
+    await host.pushHubOnce()
+    await delay(150)
+    const pushCall = calls.find((call) => call.url === BRIDGE_PUSH_PATH)
+    assert.ok(pushCall)
+    assert.equal(pushCall.auth, 'Bearer bridge-secret')
+    assert.equal(host.hubMeshPeers.length, 1)
+    const state = await host.buildState()
+    assert.ok(state.nodes.some((item) => item.id === 'relay:peer-9'))
+    assert.ok(node)
+
+    const out = await host.relayControl({ id: 'relay:peer-9', action: 'plugins.list' })
+    assert.equal(out.status, 200)
+    assert.equal(out.response.ok, true)
+    assert.equal(out.response.value.items.length, 1)
+  } finally {
+    host.dispose()
+    server.close()
+    for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
     await fsp.rm(home, { recursive: true, force: true })
   }
 })

@@ -386,3 +386,30 @@ owner（DSH Cookie） ──RPC──▶ 宿主
 - **安全**：relay 控制要求持有 Hub 的 `hubToken`；Hub 侧仍按 `CONTROL_ACTIONS` 白名单与 confirm/dryRun 门禁；relay 节点不进入 `computeAlerts`，避免离线告警噪音。
 - **测试**：core 33（新增 `validateHubRelay`、`sanitizeHubPeers`），host 24（新增「统一主节点：PC 看到全网节点，并经主节点转发控制」，含 fake Hub HTTP + relay 控制往返），合计 57/57。
 - **限制**：mesh 卡片 3 秒级状态、不代理完整 DSH 协议；relay 控制不支持 restart；同一 nodeId 冲突由 Hub 的 60 秒 IP 绑定缓解。
+
+## 18. 局域网桥接与远程界面（v0.9.0）
+
+### 18.1 目标
+
+- 同一局域网内，只要有一台节点连上 Hub，其余节点无需再配置 Hub 令牌即可获得全网视图与转发控制。
+- 应用内提供远程 DSH 界面入口。
+
+### 18.2 桥接协议
+
+- 配对响应新增 `bridge:{available,label,through}` 与 `bridgeToken`（随机 18 字节 hex，secrets.bridgeTokens，0600）。
+- 未连 Hub 的局域网节点每 3s `POST /node-monitor/api/v1/bridge/push`（Bearer bridgeToken）；桥接端有 hubLink 则转发 `/hub/push`，自身为 Hub 则写入 `hubPeers`；响应带 `peers`。
+- 控制经 `POST /node-monitor/api/v1/bridge/relay` 转发到 Hub `/hub/relay` 或本机 `controlHubNode`，动作限制同 Hub 中继（不支持 restart）。
+- 关闭：`DSH_NODE_MONITOR_BRIDGE=0` 或 `config.bridge=false`。
+
+### 18.3 远程界面
+
+- 注册第二个 `sidebar.panellist`（`node-monitor-remote`）与同名 `main` 面板。
+- 候选：本机（直接 baseUrl）或已配置登录材料的远端节点；远端通过 `openTicket` 票据 URL，iframe 指向 `/node-monitor/open?...`，宿主 302 到远端带 token 启动地址。
+- 同站可内嵌；跨站（DSH Cookie SameSite=Strict）需新标签或同域反代。
+- `sidebar.workspaces` 为宿主独占 single slot，插件不可追加，故使用并列一级入口。
+
+### 18.4 限制
+
+- 桥接依赖一台常开的 Hub 客户端；离线时退回本机视图。
+- 远程界面需登录材料；未配置时引导去节点详情。
+- 同域反代需子域名与证书，由部署方配置。

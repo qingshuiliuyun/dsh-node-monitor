@@ -14,7 +14,7 @@ English | [简体中文](README.md)
 Repository: <https://github.com/qingshuiliuyun/dsh-node-monitor>  
 Current version: **v0.7.3** (2026-11-15)  
 Tests: `npm test` → **51/51** (30 unit + 21 integration)  
-Packages: `dsh-node-monitor-dist/dsh-node-monitor-0.7.3.zip` / `.tgz`, or GitHub tag `v0.8.0`
+Packages: `dsh-node-monitor-dist/dsh-node-monitor-0.7.3.zip` / `.tgz`, or GitHub tag `v0.9.0`
 
 ---
 
@@ -146,6 +146,13 @@ If the panel is reached through a domain (HTTPS reverse proxy), configure:
 Otherwise generated join links and QR codes point at `127.0.0.1`. The proxy only needs to forward `/` to the DSH port; 45873 is an optional direct port.
 
 ## One hub, whole network (v0.8.0)
+
+## LAN bridge and remote UI (v0.9.0)
+
+- **One connection covers the LAN**: if one computer joined the hub, other computers on the same LAN get the whole network view through it (cards tagged via hub / hub), without their own hub token. Plugin list/enable actions are relayed through the bridge.
+- **Bridge token**: issued by the hub-connected peer during pairing, stored in secrets (0600), used only for bridge push/relay. Disable with `DSH_NODE_MONITOR_BRIDGE=0`.
+- **Remote DSH panel**: a new first-level sidebar entry “Remote DSH” opens a remote DSH inside the app. Same-site (same host/registrable domain, e.g. a subdomain reverse proxy) works in an iframe; cross-site cookies are blocked, so use a new tab or configure a subdomain proxy.
+- DSH's own “workspaces” area is owned by the host UI and cannot accept plugin entries, so this is a sibling first-level entry.
 
 Point every machine at the same cross-network hub. Each panel then lists:
 

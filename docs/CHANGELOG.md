@@ -1,5 +1,11 @@
 ## v0.8.0 — 2026-11-15
 
+## v0.9.0 — 2026-11-15
+
+- 局域网桥接：已连 Hub 的节点把全网视图共享给同局域网其他节点，使用配对时下发的 bridgeToken（0600 secrets）；新增 `/bridge/push`、`/bridge/relay`，`DSH_NODE_MONITOR_BRIDGE=0` 可关闭。
+- 新增侧栏一级入口「远程 DSH 界面」：应用内 iframe 打开远端 DSH（同站可内嵌；跨站受 SameSite=Strict Cookie 限制，需新标签或子域名反代）。
+- 测试 59（33 core + 26 host）。
+
 - 新增「统一主节点全网互联」：所有 PC 连同一 Hub 后，每台 PC 的面板都会出现「主节点」与「经主节点」卡片，看到全网节点状态。
 - Hub `hub/push` 响应携带对端摘要（60 秒内有上报的节点 + Hub 自己，不含令牌）；PC 侧投影为 `relay:` 只读节点。
 - 新增 `POST /node-monitor/api/v1/hub/relay` 与客户端 `relayControl` RPC：插件列表/启停操作经 Hub 转发到目标节点并回传结果。
