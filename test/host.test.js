@@ -280,7 +280,7 @@ test('宿主：agent 端点鉴权、健康检查与快照契约', async () => {
     await diagnose(mockReq(host.secrets.agentToken), diag)
     assert.equal(diag.statusCode, 200)
     const info = diag.json()
-    assert.equal(info.version, '0.9.0')
+    assert.equal(info.version, '0.9.1')
     assert.equal(typeof info.memory.heapUsed, 'number')
     assert.equal(typeof info.uptimeSec, 'number')
     assert.equal(info.nodes, 1)
@@ -1251,7 +1251,7 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
   const calls = []
   const pluginManager = {
     async listBundles() {
-      return [{ name: 'dsh-node-monitor', version: '0.9.0', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
+      return [{ name: 'dsh-node-monitor', version: '0.9.1', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
     },
     async installBundle(spec) {
       calls.push(spec)
@@ -1272,7 +1272,7 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
     assert.equal(info.ok, true)
     assert.equal(info.value.latest, '0.9.10')
     assert.equal(info.value.updateAvailable, true)
-    assert.equal(info.value.current, '0.9.0')
+    assert.equal(info.value.current, '0.9.1')
     assert.equal(info.value.install.linked, false)
 
     const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.9.10' }, undefined, owner)
@@ -1531,6 +1531,28 @@ test('局域网桥接：未连 Hub 的节点经桥接节点上报并获得全网
     host.dispose()
     server.close()
     for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
+    await fsp.rm(home, { recursive: true, force: true })
+  }
+})
+
+test('打开远程界面：登录材料是对方 127.0.0.1 时自动换成节点主机', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-rebase-'))
+  const fake = fakeContext('http://127.0.0.1:3996')
+  const host = new NodeMonitorHost(fake.ctx, { home })
+  try {
+    await host.start()
+    const call = (endpoint, payload = {}) => fake.rpc.get(RPC_CHANNEL)(endpoint, payload, undefined, owner)
+    const added = await call('addNode', { name: '客厅电脑', baseUrl: 'http://192.168.1.9:45873', adapter: 'dsh', token: 'x'.repeat(24) })
+    const node = added.value.nodes.find((item) => item.name === '客厅电脑')
+    await call('setLogin', { id: node.id, url: 'http://127.0.0.1:3081/?token=abc' })
+    const ticket = await call('openTicket', { id: node.id })
+    const open = fake.routes.get(OPEN_PATH)
+    const res = mockRes()
+    await open({ method: 'GET', url: ticket.value.url, headers: {}, socket: {} }, res)
+    assert.equal(res.statusCode, 302)
+    assert.equal(res.headers.location, 'http://192.168.1.9:3081/?token=abc')
+  } finally {
+    await host.dispose()
     await fsp.rm(home, { recursive: true, force: true })
   }
 })

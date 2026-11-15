@@ -27,7 +27,7 @@ import {
   generateAgentToken,
   generatePairingToken,
   jsonSafe,
-  maskLogin,
+  maskLogin, rebaseLoginUrl,
   mergeDiscovery,
   normalizeBaseUrl,
   parseAnnouncement,
@@ -661,4 +661,21 @@ test('Hub 对端摘要：过滤非法项并限制字段', () => {
   assert.equal(peers[1].role, 'peer')
   assert.equal(peers[1].metrics.cpuPct, 0)
   assert.deepEqual(peers[1].sessions, null)
+})
+
+test('登录地址重写：把回环主机换成节点主机，保留端口与 token', () => {
+  assert.equal(
+    rebaseLoginUrl('http://127.0.0.1:3081/?token=abc', 'http://192.168.1.9:45873'),
+    'http://192.168.1.9:3081/?token=abc'
+  )
+  // 节点本身也是回环：保持原样（同机场景）
+  assert.equal(
+    rebaseLoginUrl('http://127.0.0.1:3098/?token=abc', 'http://127.0.0.1:45873'),
+    'http://127.0.0.1:3098/?token=abc'
+  )
+  // 非回环登录地址原样保留
+  assert.equal(
+    rebaseLoginUrl('http://10.1.1.5:3081/?token=abc', 'http://192.168.1.9:45873'),
+    'http://10.1.1.5:3081/?token=abc'
+  )
 })
