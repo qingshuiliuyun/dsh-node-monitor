@@ -106,11 +106,13 @@ function mockRes() {
   }
 }
 
-function mockReq(token, method = 'GET') {
+function mockReq(token, method = 'GET', extra = {}) {
+  const headers = token ? { authorization: `Bearer ${token}` } : {}
+  if (String(method).toUpperCase() === 'POST') headers['content-type'] = 'application/json'
   return {
     method,
     socket: { remoteAddress: '127.0.0.1' },
-    headers: token ? { authorization: `Bearer ${token}` } : {}
+    headers: { ...headers, ...extra }
   }
 }
 
@@ -278,7 +280,7 @@ test('宿主：agent 端点鉴权、健康检查与快照契约', async () => {
     await diagnose(mockReq(host.secrets.agentToken), diag)
     assert.equal(diag.statusCode, 200)
     const info = diag.json()
-    assert.equal(info.version, '0.6.7')
+    assert.equal(info.version, '0.6.8')
     assert.equal(typeof info.memory.heapUsed, 'number')
     assert.equal(typeof info.uptimeSec, 'number')
     assert.equal(info.nodes, 1)
@@ -522,7 +524,7 @@ test('控制面默认关闭：/control 返回 control-disabled，审计为空', 
     {
       method: 'POST',
       url: CONTROL_PATH,
-      headers: { authorization: `Bearer ${host.secrets.agentToken}` },
+      headers: { authorization: `Bearer ${host.secrets.agentToken}`, 'content-type': 'application/json' },
       socket: { remoteAddress: '10.0.0.9' },
       on(event, cb) {
         if (event === 'data') cb(Buffer.from(JSON.stringify({ action: 'plugins.list' })))
@@ -566,7 +568,7 @@ test('控制面：dryRun 不调用插件服务，真实执行写审计且不含�
       {
         method: 'POST',
         url: CONTROL_PATH,
-        headers: { authorization: `Bearer ${host.secrets.agentToken}` },
+        headers: { authorization: `Bearer ${host.secrets.agentToken}`, 'content-type': 'application/json' },
         socket: { remoteAddress: '10.0.0.10' },
         on(event, cb) {
           if (event === 'data') cb(Buffer.from(JSON.stringify(body)))
@@ -623,7 +625,7 @@ test('控制面：restart 未确认/未允许都不执行，允许后返回 202'
       {
         method: 'POST',
         url: CONTROL_PATH,
-        headers: { authorization: `Bearer ${host.secrets.agentToken}` },
+        headers: { authorization: `Bearer ${host.secrets.agentToken}`, 'content-type': 'application/json' },
         socket: { remoteAddress: '10.0.0.11' },
         on(event, cb) {
           if (event === 'data') cb(Buffer.from(JSON.stringify(body)))
@@ -763,7 +765,7 @@ test('双向配对：接收对端登记（Bearer 校验、来源地址限制、�
     const makeReq = (payload, { method = 'POST', remote = '::ffff:192.168.1.23', auth = token } = {}) => ({
       method,
       socket: { remoteAddress: remote },
-      headers: auth ? { authorization: `Bearer ${auth}` } : {},
+      headers: auth ? { authorization: `Bearer ${auth}`, 'content-type': 'application/json' } : {},
       on(event, callback) {
         if (event === 'data') callback(Buffer.from(JSON.stringify(payload)))
         if (event === 'end') callback()
@@ -793,6 +795,14 @@ test('双向配对：接收对端登记（Bearer 校验、来源地址限制、�
     assert.equal(host.nodes.filter((item) => item.baseUrl === 'http://192.168.1.23:3101').length, 1)
 
     // 公网来源被拒
+    // 浏览器跨站防护：Origin 与 Host 不一致 → 403；POST 非 JSON → 415。
+    const evil = mockRes()
+    await handler(mockReq(host.secrets.agentToken, 'POST', { origin: 'https://evil.example', host: '127.0.0.1:3998' }), evil)
+    assert.equal(evil.statusCode, 403)
+    const plain = mockRes()
+    await handler({ method: 'POST', socket: { remoteAddress: '::ffff:192.168.1.23' }, headers: { authorization: `Bearer ${host.secrets.agentToken}` } }, plain)
+    assert.equal(plain.statusCode, 415)
+
     const wan = mockRes()
     await handler(makeReq(body, { remote: '8.8.8.8' }), wan)
     assert.equal(wan.statusCode, 403)
@@ -935,7 +945,7 @@ test('远程主节点：PC 主动上报、Hub 投影节点、控制指令往返'
     const makeReq = (payload, { method = 'POST', auth = token } = {}) => ({
       method,
       socket: { remoteAddress: '203.0.113.9' },
-      headers: auth ? { authorization: `Bearer ${auth}` } : {},
+      headers: auth ? { authorization: `Bearer ${auth}`, 'content-type': 'application/json' } : {},
       on(event, callback) {
         if (event === 'data') callback(Buffer.from(JSON.stringify(payload)))
         if (event === 'end') callback()
@@ -1020,7 +1030,7 @@ test('自动配对只交换只读令牌：状态可读但无明细，控制被�
     const pairReq = {
       method: 'POST',
       socket: { remoteAddress: '::ffff:192.168.1.30' },
-      headers: {},
+      headers: { 'content-type': 'application/json' },
       on(event, callback) {
         if (event === 'data') {
           callback(
@@ -1047,7 +1057,7 @@ test('自动配对只交换只读令牌：状态可读但无明细，控制被�
     const statusReq = {
       method: 'GET',
       socket: { remoteAddress: '::ffff:192.168.1.30' },
-      headers: { authorization: `Bearer ${host.secrets.statusToken}` }
+      headers: { authorization: `Bearer ${host.secrets.statusToken}`, 'content-type': 'application/json' }
     }
     const readOnlyRes = mockRes()
     await routes.get(AGENT_STATUS_PATH)(statusReq, readOnlyRes)
@@ -1157,7 +1167,7 @@ test('远程主节点：命令结果必须由对应节点回传', async () => {
         {
           method: 'POST',
           url: HUB_RESULT_PATH,
-          headers: { authorization: `Bearer ${host.secrets.hubToken}` },
+          headers: { authorization: `Bearer ${host.secrets.hubToken}`, 'content-type': 'application/json' },
           socket: { remoteAddress: '10.0.0.30' },
           on(event, cb) {
             if (event === 'data') cb(Buffer.from(JSON.stringify(body)))
@@ -1217,7 +1227,7 @@ test('自动配对限流、publicUrl 校验与自动节点上限', async () => {
       {
         method: 'POST',
         url: PAIR_PATH,
-        headers: {},
+        headers: { 'content-type': 'application/json' },
         socket: { remoteAddress: '10.9.9.11' },
         on(event, cb) {
           if (event === 'data') cb(Buffer.from(JSON.stringify({ auto: true, id: 'peer-x', port: 3090, agentPort: 45873, token: '0123456789abcdef' })))

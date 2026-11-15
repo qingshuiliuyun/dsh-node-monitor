@@ -1,3 +1,12 @@
+## v0.6.8 — 2026-11-15（浏览器跨站请求防护）
+
+- 所有会改变状态的 HTTP 路由（pair/control/hub push/hub result）新增两道门：
+  - 带 `Origin` 的请求必须与 `Host` 同源，否则 403；并优先使用 DSH Connection 的 `requestRejection` 做 Host/Origin 信任检查（403 时拒绝）。
+  - POST 必须携带 `Content-Type: application/json`，跨站表单/无预检请求直接 415。
+- 节点到节点调用（无 Origin、Bearer 令牌）不受影响；浏览器面板仍走 Connection RPC。
+- 这是对插件市场 review 意见（“HTTP 路由没有 DSH 访问检查”）的响应。
+- 测试：51/51。
+
 ## v0.6.7 — 2026-11-14（内存/句柄排查支持）
 
 - 探测并发限制为 6：几十个离线节点时不再同时建立大量连接。
