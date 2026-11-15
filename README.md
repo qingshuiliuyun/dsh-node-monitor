@@ -12,9 +12,9 @@
 - 运维控制默认关闭；只读令牌、dry-run、二次确认、审计日志、限流
 
 仓库：<https://github.com/qingshuiliuyun/dsh-node-monitor>  
-当前版本：**v0.7.0**（2026-11-14）  
+当前版本：**v0.7.1**（2026-11-14）  
 测试：`npm test` → **51/51**（30 单测 + 20 集成）  
-安装包：`dsh-node-monitor-dist/dsh-node-monitor-0.7.0.zip` / `.tgz` 或 GitHub tag `v0.7.0`
+安装包：`dsh-node-monitor-dist/dsh-node-monitor-0.7.0.zip` / `.tgz` 或 GitHub tag `v0.7.1`
 
 ---
 
@@ -73,7 +73,7 @@
 DSH →「插件」→「添加插件」→ 粘贴以下任一地址 → 安装 → **重启 DSH**：
 
 ```
-https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.7.0
+https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.7.1
 ```
 
 也支持直接填 GitHub 仓库地址 `https://github.com/qingshuiliuyun/dsh-node-monitor`（会拉默认分支）。
@@ -125,7 +125,7 @@ dsh plugin add /绝对路径/dsh-node-monitor
 
 ### 3. 没有服务器：接入码 + 虚拟局域网 / IPv6
 
-1. 两台都装 v0.7.0 并重启。
+1. 两台都装 v0.7.1 并重启。
 2. A：「本机配对信息」→「接入码」→ 选一个本机地址（局域网 IP / Tailscale 100.x / IPv6）。
 3. 复制接入链接（或让对方扫二维码）。
 4. B：「添加节点」→ 把链接粘贴到**节点地址**输入框 → 地址和令牌自动填好 → 保存。
@@ -145,7 +145,7 @@ dsh plugin add /绝对路径/dsh-node-monitor
 
 否则生成的加入链接/二维码会指向 `127.0.0.1`。反代只需把 `/` 转发到 DSH 端口；45873 是可选直连端口。
 
-## 插件内升级（v0.7.0）
+## 插件内升级（v0.7.1）
 
 「本机配对信息 → 插件版本」提供 **检查更新** 与 **一键升级**：
 
@@ -302,3 +302,12 @@ dsh-node-monitor/
 ## License
 
 MIT
+
+## 界面与交互（v0.7.1 重设计）
+
+- 顶部固定工具条：`⟳ 刷新`、`+ 添加节点`、`⚙ 设置`；所有配置类操作从页面主体收进设置抽屉，主体只留「告警 → 节点 → 最近活动」。
+- 设置抽屉四个分区：**连接**（令牌状态、本机配对信息、接入码、版本升级）、**远程**（Hub 连接与加入链接）、**发现**（局域网节点列表）、**通用**（刷新/告警参数、版本、文档与停用提示）。
+- 节点卡改为三列紧凑指标（CPU / 内存 / 磁盘可用），状态、网络、延迟、最近在线一眼可见；移动端自动单列、隐藏次要按钮、抽屉全屏。
+- 面板内「插件版本」行支持检查更新与一键升级（v0.7.1 起）；`link:` 安装的开发目录不提供自升级，请用面板重新安装。
+- 截图：`docs/screenshots/ui-overview-v2.png`、`ui-settings-connect.png`、`ui-settings-remote.png`、`ui-settings-general.png`、`ui-mobile-v2.png`、`ui-mobile-settings.png`。
+

@@ -1,6 +1,6 @@
 # dsh-node-monitor 设计文档
 
-> 适用版本：**v0.7.0**（2026-11-14）。本文是架构与协议规格；安装步骤见 [docs/INSTALL.md](docs/INSTALL.md)，安全细节见 [docs/SECURITY.md](docs/SECURITY.md)，关键取舍见 [docs/ARCHITECTURE-DECISIONS.md](docs/ARCHITECTURE-DECISIONS.md)，版本历史见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
+> 适用版本：**v0.7.1**（2026-11-14）。本文是架构与协议规格；安装步骤见 [docs/INSTALL.md](docs/INSTALL.md)，安全细节见 [docs/SECURITY.md](docs/SECURITY.md)，关键取舍见 [docs/ARCHITECTURE-DECISIONS.md](docs/ARCHITECTURE-DECISIONS.md)，版本历史见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 1. 目标与非目标
 
@@ -37,7 +37,7 @@
 
 假设：
 
-1. 目标 DSH 版本支持本插件（v0.7.0 宿主半）；不同版本用 `PROTOCOL=dsh.node-monitor/1` 校验，不匹配只告警。
+1. 目标 DSH 版本支持本插件（v0.7.1 宿主半）；不同版本用 `PROTOCOL=dsh.node-monitor/1` 校验，不匹配只告警。
 2. 跨节点访问走 agent 端口 45873（插件自己的 HTTP），不依赖 DSH 的 `--host`/登录态。
 3. 打开远端 DSH 界面需要其启动登录地址，插件无法自行获取，由用户一次性粘贴。
 4. 跨 NAT 的两个节点若都没有公网入口，必须借助第三点（Hub、虚拟局域网或隧道）；纯 P2P 不做。
@@ -62,7 +62,7 @@
 | v0.6.4 | 文档与修复 | 全套文档重写；`remoteId` 持久化，重启后 Hub/直连去重仍有效 |
 | v0.6.5 | 文档补充 | 架构决策记录（ADR）与英文 README |
 | v0.6.6 | 健壮性修复 | 自动配对限流、Hub 结果绑定、publicUrl/链接校验、SVG 白名单、计数与队列清理 |
-| v0.7.0 | 排查支持 | 探测并发 6、重复地址合并、`/diagnose` 诊断端点、堆超限告警日志 |
+| v0.7.1 | 排查支持 | 探测并发 6、重复地址合并、`/diagnose` 诊断端点、堆超限告警日志 |
 
 ## 4. 总体架构
 
@@ -285,6 +285,17 @@ owner（DSH Cookie） ──RPC──▶ 宿主
 - [ ] 接入码有效期（计划）
 - [ ] Hub peer 持久化（计划）
 
+## 15. 界面重设计（v0.7.1）
+
+## 15. 界面重设计（v0.7.1）
+
+- 目标：把「所有配置摊在首页」改成「顶部工具条 + 设置抽屉」，降低首屏噪声，移动端优先。
+- 结构：`nm-head`（sticky/移动端 static）内放标题、`⟳`、`+ 添加节点`、`⚙ 设置`；`Overview` 只渲染告警、筛选/批量、节点卡、最近活动；`SettingsDrawer` 为右抽屉（移动端全屏），四 tab（连接/远程/发现/通用）。
+- 组件迁移：`SelfPanel`、`HubPanel`、`DiscoveryPanel` 从 Overview 移入抽屉；`SettingsModal` 保留，由「通用」打开；版本/升级在「连接」与「通用」两处可达。
+- 节点卡：`CardMetric` 三列网格（标签+数值+细进度条），移动端单列；`打开/内嵌/编辑` 在窄屏只保留「打开」与「⋯」。
+- 可访问性/降级：抽屉有 scrim 点击关闭与 ✕；设置入口用按钮不依赖 hover；无 JS 构建，仍为单文件 bundle。
+- 测试：客户端改动不影响单测；`npm test` 53/53；Playwright 断言 `.nm-drawer` 出现/关闭、4 tab 可切换、主区 `.nm-self` 为 0、控制台 0 error。
+
 ## 13. 已知限制与路线图
 
 **限制**
@@ -326,7 +337,7 @@ owner（DSH Cookie） ──RPC──▶ 宿主
 
 `invalid-name`、`invalid-url`、`invalid-adapter`、`invalid-token`、`limit-reached`、`not-found`、`disabled`、`forbidden`、`control-disabled`、`control-action-invalid`、`control-confirm-required`、`control-restart-disabled`、`control-unavailable`、`login-url-invalid`、`open-invalid`、`open-expired`、`peer-conflict`、`peer-limit`、`batch-invalid`、`batch-empty`、`batch-too-many`、`auth`、`timeout`、`unreachable`、`http-status`、`bad-json`、`protocol-missing`、`remote-unhealthy`、`unknown-endpoint`、`rate-limited`、`unauthorized`、`body-too-large`、`bad-json`。
 
-## 14. 插件内升级（v0.7.0）
+## 14. 插件内升级（v0.7.1）
 
 - **来源**：`GET https://api.github.com/repos/qingshuiliuyun/dsh-node-monitor/tags?per_page=30`，取 semver 最大 tag；5 分钟缓存；失败返回 `error` 不阻塞面板。
 - **RPC**：

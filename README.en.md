@@ -12,9 +12,9 @@ English | [简体中文](README.md)
 - Ops control is off by default; read-only tokens, dry-run, confirmation, audit log and rate limits
 
 Repository: <https://github.com/qingshuiliuyun/dsh-node-monitor>  
-Current version: **v0.7.0** (2026-11-14)  
+Current version: **v0.7.1** (2026-11-14)  
 Tests: `npm test` → **51/51** (30 unit + 21 integration)  
-Packages: `dsh-node-monitor-dist/dsh-node-monitor-0.7.0.zip` / `.tgz`, or GitHub tag `v0.7.0`
+Packages: `dsh-node-monitor-dist/dsh-node-monitor-0.7.0.zip` / `.tgz`, or GitHub tag `v0.7.1`
 
 ---
 
@@ -73,7 +73,7 @@ Four typical topologies:
 DSH → **Plugins** → **Add plugin** → paste one of the URLs below → install → **restart DSH**:
 
 ```
-https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.7.0
+https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.7.1
 ```
 
 The repository URL `https://github.com/qingshuiliuyun/dsh-node-monitor` also works (default branch).
@@ -125,7 +125,7 @@ Best when you have an always-on old PC, NAS or cloud server.
 
 ### 3. No server: invite links + virtual LAN / IPv6
 
-1. Install v0.7.0 on both machines and restart.
+1. Install v0.7.1 on both machines and restart.
 2. On A: **Local pairing info** → **Invite** → pick an address (LAN IP / Tailscale 100.x / IPv6).
 3. Copy the invite link (or let the other side scan the QR code).
 4. On B: **Add node** → paste the link into the **node address** field → address and token are filled in → save.
