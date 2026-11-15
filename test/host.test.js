@@ -9,7 +9,7 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { NodeMonitorHost, apply } from '../lib/index.js'
-import { AGENT_HEALTH_PATH, AGENT_STATUS_PATH, CONTROL_PATH, DIAGNOSE_PATH, HUB_PUSH_PATH, HUB_RESULT_PATH, OPEN_PATH, PAIR_PATH, PROTOCOL, RPC_CHANNEL, buildAnnouncement } from '../lib/core.js'
+import { AGENT_HEALTH_PATH, AGENT_STATUS_PATH, CONTROL_PATH, DIAGNOSE_PATH, HUB_PUSH_PATH, HUB_RESULT_PATH, HUB_RELAY_PATH, OPEN_PATH, PAIR_PATH, PROTOCOL, RPC_CHANNEL, buildAnnouncement } from '../lib/core.js'
 import { parseNodeLink } from '../lib/core.js'
 
 const owner = { principal: { kind: 'owner' } }
@@ -280,7 +280,7 @@ test('宿主：agent 端点鉴权、健康检查与快照契约', async () => {
     await diagnose(mockReq(host.secrets.agentToken), diag)
     assert.equal(diag.statusCode, 200)
     const info = diag.json()
-    assert.equal(info.version, '0.7.3')
+    assert.equal(info.version, '0.8.0')
     assert.equal(typeof info.memory.heapUsed, 'number')
     assert.equal(typeof info.uptimeSec, 'number')
     assert.equal(info.nodes, 1)
@@ -1251,7 +1251,7 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
   const calls = []
   const pluginManager = {
     async listBundles() {
-      return [{ name: 'dsh-node-monitor', version: '0.7.3', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
+      return [{ name: 'dsh-node-monitor', version: '0.8.0', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
     },
     async installBundle(spec) {
       calls.push(spec)
@@ -1272,7 +1272,7 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
     assert.equal(info.ok, true)
     assert.equal(info.value.latest, '0.9.10')
     assert.equal(info.value.updateAvailable, true)
-    assert.equal(info.value.current, '0.7.3')
+    assert.equal(info.value.current, '0.8.0')
     assert.equal(info.value.install.linked, false)
 
     const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.9.10' }, undefined, owner)
@@ -1337,6 +1337,73 @@ test('本机节点：自动创建，删除后可一键恢复，端口变化时�
   } finally {
     await Promise.resolve(host.dispose()).catch(() => {})
     for (const cleanup of first.cleanups) await Promise.resolve(cleanup()).catch(() => {})
+    await fsp.rm(home, { recursive: true, force: true })
+  }
+})
+
+
+test('统一主节点：PC 看到全网节点，并经主节点转发控制', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-mesh-'))
+  let relayAuth = ''
+  let relayBody = null
+  const hub = http.createServer(async (req, res) => {
+    let raw = ''
+    for await (const chunk of req) raw += chunk
+    const body = raw ? JSON.parse(raw) : {}
+    if (req.url === HUB_PUSH_PATH) {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({
+        ok: true,
+        commands: [],
+        hub: { label: 'hub' },
+        peers: [
+          { nodeId: 'peer-2', name: '客厅电脑', hostname: 'living-room', version: '0.8.0', role: 'peer', online: true, lastSeen: Date.now(), metrics: { cpuPct: 21, memPct: 42, diskFreePct: 63 }, sessions: { total: 3, running: 1 } },
+          { nodeId: 'hub-self', name: '云服务器', hostname: 'cloud', version: '0.8.0', role: 'hub', online: true, lastSeen: Date.now() }
+        ]
+      }))
+      return
+    }
+    if (req.url === HUB_RELAY_PATH) {
+      relayAuth = req.headers.authorization || ''
+      relayBody = body
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ ok: true, value: { ok: true, value: { items: [{ id: 'entry-a', name: 'A', enabled: true }] } } }))
+      return
+    }
+    res.writeHead(404).end()
+  })
+  await new Promise((resolve) => hub.listen(0, '127.0.0.1', resolve))
+  const port = hub.address().port
+  const { ctx, cleanups } = fakeContext('http://127.0.0.1:3995')
+  const host = new NodeMonitorHost(ctx, { home })
+  try {
+    await host.start()
+    await delay(30)
+    host.hubLink = { url: `http://127.0.0.1:${port}`, token: 'hub-token-xyz' }
+    await host.pushHubOnce()
+    await delay(30)
+
+    const state = await host.buildState()
+    const relay = state.nodes.find((node) => node.id === 'relay:peer-2')
+    assert.ok(relay, 'mesh peer projected')
+    assert.equal(relay.adapter, 'relay')
+    assert.equal(relay.tags.includes('relay'), true)
+    assert.equal(state.probes['relay:peer-2'].status, 'online')
+    assert.equal(state.probes['relay:peer-2'].snapshot.metrics.cpuPct, 21)
+    assert.ok(state.nodes.some((node) => node.id === 'relay:hub-self' && node.tags.includes('mesh-hub')))
+
+    const rpc = await host.handleRpc('control', { id: 'relay:peer-2', action: 'plugins.list', dryRun: false }, null, owner)
+    assert.equal(rpc.ok, true)
+    assert.equal(rpc.value.response.ok, true)
+    assert.equal(rpc.value.response.value.items[0].id, 'entry-a')
+    assert.equal(relayAuth, 'Bearer hub-token-xyz')
+    assert.equal(relayBody.targetId, 'peer-2')
+    assert.equal(relayBody.action, 'plugins.list')
+
+    for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
+  } finally {
+    await host.dispose()
+    await new Promise((resolve) => hub.close(resolve))
     await fsp.rm(home, { recursive: true, force: true })
   }
 })

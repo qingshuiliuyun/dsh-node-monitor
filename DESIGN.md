@@ -64,6 +64,7 @@
 | v0.6.6 | 健壮性修复 | 自动配对限流、Hub 结果绑定、publicUrl/链接校验、SVG 白名单、计数与队列清理 |
 | v0.7.1 | 排查支持 | 探测并发 6、重复地址合并、`/diagnose` 诊断端点、堆超限告警日志 |
 | v0.7.2 | 零参数体验 | 本机节点自愈、`addSelf`/`pairDiscovered` RPC、添加表单基础/高级分层、发现列表一键自动接入 |
+| v0.8.0 | 全网互联 | 主节点下发对端摘要、PC 投影 `relay:` 节点、`hub/relay` 中继控制、`relayControl` RPC |
 | v0.7.3 | 连接体验 | 令牌显示切换与容错匹配、内置填写示例、跨网络措辞、远程界面说明与登录材料引导、打开拦截对话框 |
 
 ## 4. 总体架构
@@ -367,3 +368,21 @@ owner（DSH Cookie） ──RPC──▶ 宿主
 - **打开语义**：节点详情新增「远程 DSH 界面」：未配置登录材料时显示说明与「填写登录材料」，配置后才显示「打开」；本机节点例外（同源 cookie 可直接打开）。
 - **打开失败可见化**：`openNode` 在弹窗被拦截、宿主过旧、缺登录材料时分别弹出 `LinkDialog`（打开新标签 / 复制链接）或直接进入登录材料编辑，不再静默失败。
 - **测试**：54/54；令牌容错、界面断言通过；无协议变更。
+
+
+## 17. 统一主节点：全网互联（v0.8.0）
+
+- **目标**：所有 PC 连同一个 Hub 后，每台 PC 都能看到全部节点（星型控制面、逻辑全网），而不是只有 Hub 能看到所有 PC。
+- **Hub 侧**：
+  - `handleHubPush` 响应增加 `peers: hubPeerSummaries(nodeId)`：其他最近 60 秒上报的 peer（`nodeId/name/hostname/version/role/online/lastSeen/metrics/sessions`）+ Hub 自己（`role:'hub'`），最多 64 条；不包含任何令牌。
+  - `hubPeerSummaries` 只保留 60 秒内有上报的节点，避免离线节点长期残留。
+  - 新增 `POST /node-monitor/api/v1/hub/relay`（`handleHubRelay`，Bearer `hubToken`）：`validateHubRelay` 校验目标与动作（`plugins.list` / `plugins.setEnabled`，不支持 `restart`），复用 `controlHubNode` 命令队列→推送→结果回传链路，返回 `{ok:true,value:<目标结果>}` 或 `{ok:false,error}`。
+- **PC 侧**：
+  - `pushHubOnce` 把响应 `peers` 存入 `this.hubMeshPeers = core.sanitizeHubPeers(...)`（白名单字段）。
+  - `meshNodes()`：过滤 `nodeId === 自己` 或已被局域网直连节点 `remoteId` 覆盖的 peer，生成 `id:'relay:<nodeId>'`、`adapter:'relay'`、`tags:['relay']`（Hub 为 `['relay','mesh-hub']`）的只读卡片；`hubPeerSummaries` 的 Hub 条目也会出现为「主节点」卡片。
+  - `meshProbeRecord`：用 peer 的 metrics/sessions 合成快照；Hub 节点不暴露控制，其他 relay 节点暴露 `plugins.list`/`plugins.setEnabled`。
+  - `controlNode` 对 `relay:` 前缀分流到 `relayControl`，经 Hub `/hub/relay` 转发；`relayControl` RPC（owner-only）返回目标节点的 `{ok,value|error}`。
+- **UI**：卡片标签「经主节点」「主节点」；relay 卡片隐藏打开/内嵌（无登录材料且非同源）；详情页运维控制带提示「该节点经主节点转发，操作由主节点代发」。
+- **安全**：relay 控制要求持有 Hub 的 `hubToken`；Hub 侧仍按 `CONTROL_ACTIONS` 白名单与 confirm/dryRun 门禁；relay 节点不进入 `computeAlerts`，避免离线告警噪音。
+- **测试**：core 33（新增 `validateHubRelay`、`sanitizeHubPeers`），host 24（新增「统一主节点：PC 看到全网节点，并经主节点转发控制」，含 fake Hub HTTP + relay 控制往返），合计 57/57。
+- **限制**：mesh 卡片 3 秒级状态、不代理完整 DSH 协议；relay 控制不支持 restart；同一 nodeId 冲突由 Hub 的 60 秒 IP 绑定缓解。

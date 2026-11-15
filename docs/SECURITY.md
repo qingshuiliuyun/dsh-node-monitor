@@ -100,6 +100,7 @@
 - Hub 的加入令牌是**每个 Hub 共享**的：拿到令牌的客户端可以用另一个 `nodeId` 上报伪造状态。当前用「同 nodeId 60 秒内换 IP 拒绝」缓解，但没有按客户端签发独立令牌。建议每个信任域单独一个 Hub，怀疑泄露时轮换 `hubToken`。
 - 自动配对不校验对端身份，只交换只读令牌；同网段伪造公告可以让面板出现一条只读假节点（不能控制，也不影响真实节点）。设 `DSH_NODE_MONITOR_AUTO_PAIR=0` 可关闭。
 - `pairDiscovered` 与 `addSelf` 均为 owner-only；前者复用自动配对流程，仍只交换 `statusToken`，不会暴露完整连接令牌。
+- v0.8.0 的 `hub/relay` 允许持有 Hub 令牌的客户端对其他节点执行 `plugins.list`/`plugins.setEnabled`（仍受目标节点 `allowControl`、dryRun/confirm 与白名单约束）；Hub 令牌等同网络管理权限，只应在自己的设备间共享。relay 结果只回传给发起请求的客户端。
 
 ## 版本支持
 

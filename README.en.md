@@ -14,7 +14,7 @@ English | [简体中文](README.md)
 Repository: <https://github.com/qingshuiliuyun/dsh-node-monitor>  
 Current version: **v0.7.3** (2026-11-15)  
 Tests: `npm test` → **51/51** (30 unit + 21 integration)  
-Packages: `dsh-node-monitor-dist/dsh-node-monitor-0.7.3.zip` / `.tgz`, or GitHub tag `v0.7.2`
+Packages: `dsh-node-monitor-dist/dsh-node-monitor-0.7.3.zip` / `.tgz`, or GitHub tag `v0.8.0`
 
 ---
 
@@ -145,6 +145,17 @@ If the panel is reached through a domain (HTTPS reverse proxy), configure:
 
 Otherwise generated join links and QR codes point at `127.0.0.1`. The proxy only needs to forward `/` to the DSH port; 45873 is an optional direct port.
 
+## One hub, whole network (v0.8.0)
+
+Point every machine at the same cross-network hub. Each panel then lists:
+
+- the **hub** node (tag `hub`);
+- every other online machine (tag `via hub`), with CPU / memory / disk / session counts refreshed every 3 seconds.
+
+So after connecting to the same remote hub, **everyone sees everyone** without pairwise pairing. Plugin operations (list/enable/disable) are relayed through the hub to the target machine and the result comes back to your panel.
+
+Limits: cross-network cards are status + plugin management, not the full DSH UI (opening a remote DSH still needs its login material). Relay supports `plugins.list` and `plugins.setEnabled`.
+
 ## Fully automatic & local node (v0.7.2)
 
 - **Local node appears automatically**: the plugin creates/repairs the loopback node on startup, updates its address when the DSH port changes, and restores it if deleted.
@@ -259,7 +270,7 @@ UDP discovery: 45871, multicast `239.255.43.21`, every 30s, 5-minute TTL; fields
 ## Development and tests
 
 ```bash
-npm test                 # 54/54
+npm test                 # 57/57
 node --test --test-force-exit test/core.test.js
 node --test --test-force-exit test/host.test.js
 ```

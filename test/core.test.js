@@ -41,6 +41,8 @@ import {
   summarize,
   toPersistedState,
   validateBatchRequest,
+  validateHubRelay,
+  sanitizeHubPeers,
   validateControlRequest,
   validateNodeInput,
   compareVersions,
@@ -626,4 +628,37 @@ test('版本工具：语义化比较、标签挑选与清洗', () => {
   assert.equal(cleanVersion('v0.7.1'), '0.7.1')
   assert.equal(cleanVersion('0.7'), '')
   assert.equal(cleanVersion('v1.2.3.4'), '')
+})
+
+
+test('Hub 中继：动作白名单、目标必填、重启被拒', () => {
+  const list = validateHubRelay({ targetId: 'peer-1', action: 'plugins.list' })
+  assert.equal(list.ok, true)
+  assert.equal(list.value.targetId, 'peer-1')
+  const missing = validateHubRelay({ action: 'plugins.list' })
+  assert.equal(missing.ok, false)
+  assert.equal(missing.error.code, 'relay-invalid')
+  const bad = validateHubRelay({ targetId: 'peer-1', action: 'restart', confirm: true })
+  assert.equal(bad.ok, false)
+  const toggle = validateHubRelay({ targetId: 'peer-1', action: 'plugins.setEnabled', params: { id: 'x', enabled: false } })
+  assert.equal(toggle.ok, true)
+  assert.equal(toggle.value.dryRun, true)
+  const noConfirm = validateHubRelay({ targetId: 'peer-1', action: 'plugins.setEnabled', params: { id: 'x', enabled: false }, dryRun: false })
+  assert.equal(noConfirm.ok, false)
+  assert.equal(noConfirm.error.code, 'control-confirm-required')
+})
+
+test('Hub 对端摘要：过滤非法项并限制字段', () => {
+  const peers = sanitizeHubPeers([
+    { nodeId: 'a', name: 'A', role: 'hub', online: true, lastSeen: 123, metrics: { cpuPct: 12.6, memPct: 30, diskFreePct: 50 }, sessions: { total: 2, running: 1 } },
+    { nodeId: '', name: 'bad' },
+    null,
+    { nodeId: 'b', name: 'B', role: 'peer', online: false, metrics: { cpuPct: 'x' } }
+  ])
+  assert.equal(peers.length, 2)
+  assert.equal(peers[0].role, 'hub')
+  assert.equal(peers[0].metrics.cpuPct, 13)
+  assert.equal(peers[1].role, 'peer')
+  assert.equal(peers[1].metrics.cpuPct, 0)
+  assert.deepEqual(peers[1].sessions, null)
 })

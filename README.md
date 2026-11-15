@@ -154,6 +154,17 @@ dsh plugin add /绝对路径/dsh-node-monitor
 - 本地 `link:` 安装（开发模式）会拒绝自升级，避免覆盖开发目录；关闭开关：`selfUpgrade: false` 或 `DSH_NODE_MONITOR_SELF_UPGRADE=0`。
 - 离线环境检查会失败并给出 GitHub Releases 链接，可手动下载。
 
+## 统一主节点：全网互联（v0.8.0）
+
+当所有电脑都连到同一个「跨网络主节点」后，每台电脑的面板会自动出现两类卡片：
+
+- **主节点**（`主节点` 标签）：提供网络中继的那台机器；
+- **经主节点**（`经主节点` 标签）：其他所有在线电脑，显示它们上报的 CPU/内存/磁盘/会话数。
+
+所以「大家连同一个远程」之后，**每台电脑都能看到全部节点**，不需要两两配对。操作（加载插件列表、启用/停用插件）会经主节点转发到目标电脑执行，结果回传到你的面板。数据每 3 秒同步一次；主节点断线时这些卡片会保留并显示最近一次数据。
+
+限制：跨网络卡片是**状态与插件管理**，不是完整 DSH 界面（打开对方 DSH 仍需登录材料，见上文）；中继操作仅限 `plugins.list` / `plugins.setEnabled`。
+
 ## 全自动与本机节点（v0.7.2）
 
 - **本机节点自动出现**：插件启动后自动创建/修复「本机自检节点」；DSH 端口变化时自动更新地址；误删后下个采集周期自动恢复，也可在「设置 → 连接 → 添加/修复本机节点」手动触发。
@@ -271,6 +282,10 @@ UDP 发现：45871，组播 `239.255.43.21`，30s 一次，TTL 5 分钟，字段
 | --- | --- |
 | ![](docs/screenshots/ui-self-auto.png) | ![](docs/screenshots/ui-add-simple.png) |
 
+| 统一主节点全网互联 |
+| --- |
+| ![](docs/screenshots/mesh-hub.png) |
+
 | 填写示例与令牌显示 | 远程界面说明 |
 | --- | --- |
 | ![](docs/screenshots/ui-add-help.png) | ![](docs/screenshots/ui-remote-explain.png) |
@@ -278,14 +293,14 @@ UDP 发现：45871，组播 `239.255.43.21`，30s 一次，TTL 5 分钟，字段
 ## 开发与测试
 
 ```bash
-npm test                 # 54/54
+npm test                 # 57/57
 node --test --test-force-exit test/core.test.js
 node --test --test-force-exit test/host.test.js
 ```
 
 - 无运行时依赖；二维码使用内置 `lib/qrcode.js`（qrcode-generator 2.0.4，MIT）。
 - 目录：`lib/core.js`（纯逻辑/协议）、`lib/index.js`（宿主）、`lib/client.js`（浏览器 bundle）、`lib/qrcode.js`。
-- 测试：`test/core.test.js`（31）、`test/host.test.js`（23，含真实 `node:http` 往返）。
+- 测试：`test/core.test.js`（33）、`test/host.test.js`（24，含真实 `node:http` 往返与主节点中继）。
 
 ## 故障排查
 
