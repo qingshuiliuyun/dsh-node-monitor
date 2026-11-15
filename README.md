@@ -271,6 +271,10 @@ UDP 发现：45871，组播 `239.255.43.21`，30s 一次，TTL 5 分钟，字段
 | --- | --- |
 | ![](docs/screenshots/ui-self-auto.png) | ![](docs/screenshots/ui-add-simple.png) |
 
+| 填写示例与令牌显示 | 远程界面说明 |
+| --- | --- |
+| ![](docs/screenshots/ui-add-help.png) | ![](docs/screenshots/ui-remote-explain.png) |
+
 ## 开发与测试
 
 ```bash
