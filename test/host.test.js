@@ -280,7 +280,7 @@ test('宿主：agent 端点鉴权、健康检查与快照契约', async () => {
     await diagnose(mockReq(host.secrets.agentToken), diag)
     assert.equal(diag.statusCode, 200)
     const info = diag.json()
-    assert.equal(info.version, '0.7.2')
+    assert.equal(info.version, '0.7.3')
     assert.equal(typeof info.memory.heapUsed, 'number')
     assert.equal(typeof info.uptimeSec, 'number')
     assert.equal(info.nodes, 1)
@@ -1251,7 +1251,7 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
   const calls = []
   const pluginManager = {
     async listBundles() {
-      return [{ name: 'dsh-node-monitor', version: '0.7.2', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
+      return [{ name: 'dsh-node-monitor', version: '0.7.3', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
     },
     async installBundle(spec) {
       calls.push(spec)
@@ -1272,7 +1272,7 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
     assert.equal(info.ok, true)
     assert.equal(info.value.latest, '0.9.10')
     assert.equal(info.value.updateAvailable, true)
-    assert.equal(info.value.current, '0.7.2')
+    assert.equal(info.value.current, '0.7.3')
     assert.equal(info.value.install.linked, false)
 
     const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.9.10' }, undefined, owner)

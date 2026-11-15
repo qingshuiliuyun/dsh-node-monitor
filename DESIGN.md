@@ -1,6 +1,6 @@
 # dsh-node-monitor 设计文档
 
-> 适用版本：**v0.7.2**（2026-11-15）。本文是架构与协议规格；安装步骤见 [docs/INSTALL.md](docs/INSTALL.md)，安全细节见 [docs/SECURITY.md](docs/SECURITY.md)，关键取舍见 [docs/ARCHITECTURE-DECISIONS.md](docs/ARCHITECTURE-DECISIONS.md)，版本历史见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
+> 适用版本：**v0.7.3**（2026-11-15）。本文是架构与协议规格；安装步骤见 [docs/INSTALL.md](docs/INSTALL.md)，安全细节见 [docs/SECURITY.md](docs/SECURITY.md)，关键取舍见 [docs/ARCHITECTURE-DECISIONS.md](docs/ARCHITECTURE-DECISIONS.md)，版本历史见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 1. 目标与非目标
 
@@ -64,6 +64,7 @@
 | v0.6.6 | 健壮性修复 | 自动配对限流、Hub 结果绑定、publicUrl/链接校验、SVG 白名单、计数与队列清理 |
 | v0.7.1 | 排查支持 | 探测并发 6、重复地址合并、`/diagnose` 诊断端点、堆超限告警日志 |
 | v0.7.2 | 零参数体验 | 本机节点自愈、`addSelf`/`pairDiscovered` RPC、添加表单基础/高级分层、发现列表一键自动接入 |
+| v0.7.3 | 连接体验 | 令牌显示切换与容错匹配、内置填写示例、跨网络措辞、远程界面说明与登录材料引导、打开拦截对话框 |
 
 ## 4. 总体架构
 
@@ -355,3 +356,14 @@ owner（DSH Cookie） ──RPC──▶ 宿主
 - **UI 简化**：NodeModal 只展示 名称/地址/令牌，其余收进 `<details>`「高级选项」；空态提供「添加本机节点」；发现条目提供「自动接入」（无需令牌）与「手动填写」；设置抽屉连接页提供「添加/修复本机节点」；副标题与提示文案说明自动行为。
 - **发现地址**：快照增加 `agentAddress`（`http://host:agentPort`），列表直接显示可探测的 agent 地址，而不是 DSH 网页端口。
 - **测试**：`test/core.test.js` 31、`test/host.test.js` 23（新增本机节点自愈/恢复/端口跟随），合计 54/54。
+
+
+## 17. 连接体验修正（v0.7.3）
+
+- **令牌容错**：`core.tokenVariants()` 归一化（trim、去空格/连字符、大写回退），`core.tokenEquals()` 在 agent/status/hub 令牌校验处替代严格比较；生成仍保留可读的 `XXXX-XXXX-XXXX`。
+- **密码可见**：`PasswordInput` 统一组件（右置显示/隐藏按钮），用于节点连接令牌、登录材料、Hub 加入令牌。
+- **填写引导**：添加节点弹窗默认展开「怎么填？看这里（含示例）」，四段说明（同 Wi-Fi / 不同网络地址示例 / 令牌来源 / 名称），地址占位符改为真实示例。
+- **措辞**：`远程` 改为 `跨网络`（tab、Hub 标题、节点标签、网络说明），并解释「不在同一 Wi-Fi 时使用」。
+- **打开语义**：节点详情新增「远程 DSH 界面」：未配置登录材料时显示说明与「填写登录材料」，配置后才显示「打开」；本机节点例外（同源 cookie 可直接打开）。
+- **打开失败可见化**：`openNode` 在弹窗被拦截、宿主过旧、缺登录材料时分别弹出 `LinkDialog`（打开新标签 / 复制链接）或直接进入登录材料编辑，不再静默失败。
+- **测试**：54/54；令牌容错、界面断言通过；无协议变更。

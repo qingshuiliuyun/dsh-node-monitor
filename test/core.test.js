@@ -14,6 +14,7 @@ import {
   clampSettings,
   classifyProbe,
   compareTokens,
+  tokenEquals,
   computeAlerts,
   discoveryAddress,
   emptySnapshot,
@@ -111,6 +112,12 @@ test('令牌生成与恒时比较', () => {
   assert.equal(compareTokens(first, second), false)
   assert.equal(compareTokens(first, undefined), false)
   assert.equal(compareTokens('', ''), false)
+  assert.equal(tokenEquals('ABCD-EFGH-IJKL', 'ABCDEFGHIJKL'), true)
+  assert.equal(tokenEquals('abcd-efgh-ijkl', 'ABCDEFGHIJKL'), true)
+  assert.equal(tokenEquals(' ABCD EFGH IJKL ', 'ABCD-EFGH-IJKL'), true)
+  assert.equal(tokenEquals('ABCD-EFGH-IJKM', 'ABCD-EFGH-IJKL'), false)
+  assert.equal(tokenEquals('', 'ABCD'), false)
+  assert.equal(tokenEquals(undefined, 'ABCD'), false)
 })
 
 test('clampSettings 夹取所有阈值且非法输入回退默认值', () => {

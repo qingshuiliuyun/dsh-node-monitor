@@ -12,9 +12,9 @@ English | [简体中文](README.md)
 - Ops control is off by default; read-only tokens, dry-run, confirmation, audit log and rate limits
 
 Repository: <https://github.com/qingshuiliuyun/dsh-node-monitor>  
-Current version: **v0.7.2** (2026-11-15)  
+Current version: **v0.7.3** (2026-11-15)  
 Tests: `npm test` → **51/51** (30 unit + 21 integration)  
-Packages: `dsh-node-monitor-dist/dsh-node-monitor-0.7.2.zip` / `.tgz`, or GitHub tag `v0.7.2`
+Packages: `dsh-node-monitor-dist/dsh-node-monitor-0.7.3.zip` / `.tgz`, or GitHub tag `v0.7.2`
 
 ---
 
@@ -73,7 +73,7 @@ Four typical topologies:
 DSH → **Plugins** → **Add plugin** → paste one of the URLs below → install → **restart DSH**:
 
 ```
-https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.7.2
+https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.7.3
 ```
 
 The repository URL `https://github.com/qingshuiliuyun/dsh-node-monitor` also works (default branch).
@@ -125,7 +125,7 @@ Best when you have an always-on old PC, NAS or cloud server.
 
 ### 3. No server: invite links + virtual LAN / IPv6
 
-1. Install v0.7.2 on both machines and restart.
+1. Install v0.7.3 on both machines and restart.
 2. On A: **Local pairing info** → **Invite** → pick an address (LAN IP / Tailscale 100.x / IPv6).
 3. Copy the invite link (or let the other side scan the QR code).
 4. On B: **Add node** → paste the link into the **node address** field → address and token are filled in → save.
@@ -161,6 +161,15 @@ Otherwise generated join links and QR codes point at `127.0.0.1`. The proxy only
 - **Remote hub**: enter URL + token when unconnected; when connected show state; on the hub side show join URL/token, joined count, copy join link and QR code.
 - **Add/edit node**: name is optional (auto-filled from the remote hostname), address, adapter (DSH/generic HTTP), network, notes, token, tags, probing; pasting a join/invite link is parsed automatically.
 - **Mobile**: single column at ≤760px; batch bar and filters wrap; embedded view is full-screen.
+
+## Connection details (v0.7.3)
+
+- **Reveal tokens**: every token input has Show/Hide; hyphens, case and spaces in connection tokens are normalized.
+- **Where to add**: top-right "Add node", the empty-state button, or Settings > Connection (add/repair local node, invite code).
+- **What to fill**: the add dialog opens a "How to fill this in (with examples)" block; address example `http://192.168.1.23:45873`, token from the peer under Settings > Connection > Connection token.
+- **What "across networks" means**: use it when computers are not on the same Wi-Fi: an always-on/public DSH as hub, or paste an invite link. Same-LAN "Discovery" joins automatically without a token.
+- **Why the peer DSH UI does not open directly**: adding a node only connects monitoring/control. Opening the full DSH UI also needs its login URL (the launch link with `?token=`). Node details now explain this and show "Save login material" until configured.
+- **Blocked tabs**: a dialog with "Open in new tab" and "Copy link" replaces the previous silent failure.
 
 ## Security model
 
