@@ -280,7 +280,7 @@ test('宿主：agent 端点鉴权、健康检查与快照契约', async () => {
     await diagnose(mockReq(host.secrets.agentToken), diag)
     assert.equal(diag.statusCode, 200)
     const info = diag.json()
-    assert.equal(info.version, '0.10.1')
+    assert.equal(info.version, '0.10.2')
     assert.equal(typeof info.memory.heapUsed, 'number')
     assert.equal(typeof info.uptimeSec, 'number')
     assert.equal(info.nodes, 1)
@@ -1251,7 +1251,7 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
   const calls = []
   const pluginManager = {
     async listBundles() {
-      return [{ name: 'dsh-node-monitor', version: '0.10.1', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
+      return [{ name: 'dsh-node-monitor', version: '0.10.2', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
     },
     async installBundle(spec) {
       calls.push(spec)
@@ -1266,26 +1266,26 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
     await delay(50)
     globalThis.fetch = async (url) => {
       assert.ok(String(url).includes('/tags'))
-      return { ok: true, json: async () => [{ name: 'v0.10.2' }, { name: 'v0.9.8' }, { name: 'v0.10.1' }] }
+      return { ok: true, json: async () => [{ name: 'v0.10.3' }, { name: 'v0.9.8' }, { name: 'v0.10.2' }] }
     }
     const info = await rpc.get(RPC_CHANNEL)('upgradeCheck', {}, undefined, owner)
     assert.equal(info.ok, true)
-    assert.equal(info.value.latest, '0.10.2')
+    assert.equal(info.value.latest, '0.10.3')
     assert.equal(info.value.updateAvailable, true)
-    assert.equal(info.value.current, '0.10.1')
+    assert.equal(info.value.current, '0.10.2')
     assert.equal(info.value.install.linked, false)
 
-    const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.10.2' }, undefined, owner)
+    const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.10.3' }, undefined, owner)
     assert.equal(applied.ok, true)
-    assert.equal(applied.value.target, '0.10.2')
-    assert.ok(calls[0].includes('refs/tags/v0.10.2'))
+    assert.equal(applied.value.target, '0.10.3')
+    assert.ok(calls[0].includes('refs/tags/v0.10.3'))
 
     const stale = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.6.8' }, undefined, owner)
     assert.equal(stale.ok, false)
     assert.match(stale.error.code, /upgrade-current/)
 
     const browser = { principal: { kind: 'browser' } }
-    const denied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.10.2' }, undefined, browser)
+    const denied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.10.3' }, undefined, browser)
     assert.equal(denied.ok, false)
   } finally {
     globalThis.fetch = originalFetch
