@@ -1,6 +1,6 @@
 # dsh-node-monitor 设计文档
 
-> 适用版本：**v0.6.8**（2026-11-14）。本文是架构与协议规格；安装步骤见 [docs/INSTALL.md](docs/INSTALL.md)，安全细节见 [docs/SECURITY.md](docs/SECURITY.md)，关键取舍见 [docs/ARCHITECTURE-DECISIONS.md](docs/ARCHITECTURE-DECISIONS.md)，版本历史见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
+> 适用版本：**v0.7.0**（2026-11-14）。本文是架构与协议规格；安装步骤见 [docs/INSTALL.md](docs/INSTALL.md)，安全细节见 [docs/SECURITY.md](docs/SECURITY.md)，关键取舍见 [docs/ARCHITECTURE-DECISIONS.md](docs/ARCHITECTURE-DECISIONS.md)，版本历史见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 1. 目标与非目标
 
@@ -37,7 +37,7 @@
 
 假设：
 
-1. 目标 DSH 版本支持本插件（v0.6.8 宿主半）；不同版本用 `PROTOCOL=dsh.node-monitor/1` 校验，不匹配只告警。
+1. 目标 DSH 版本支持本插件（v0.7.0 宿主半）；不同版本用 `PROTOCOL=dsh.node-monitor/1` 校验，不匹配只告警。
 2. 跨节点访问走 agent 端口 45873（插件自己的 HTTP），不依赖 DSH 的 `--host`/登录态。
 3. 打开远端 DSH 界面需要其启动登录地址，插件无法自行获取，由用户一次性粘贴。
 4. 跨 NAT 的两个节点若都没有公网入口，必须借助第三点（Hub、虚拟局域网或隧道）；纯 P2P 不做。
@@ -62,7 +62,7 @@
 | v0.6.4 | 文档与修复 | 全套文档重写；`remoteId` 持久化，重启后 Hub/直连去重仍有效 |
 | v0.6.5 | 文档补充 | 架构决策记录（ADR）与英文 README |
 | v0.6.6 | 健壮性修复 | 自动配对限流、Hub 结果绑定、publicUrl/链接校验、SVG 白名单、计数与队列清理 |
-| v0.6.8 | 排查支持 | 探测并发 6、重复地址合并、`/diagnose` 诊断端点、堆超限告警日志 |
+| v0.7.0 | 排查支持 | 探测并发 6、重复地址合并、`/diagnose` 诊断端点、堆超限告警日志 |
 
 ## 4. 总体架构
 
@@ -325,3 +325,12 @@ owner（DSH Cookie） ──RPC──▶ 宿主
 ## 附录 B：错误码
 
 `invalid-name`、`invalid-url`、`invalid-adapter`、`invalid-token`、`limit-reached`、`not-found`、`disabled`、`forbidden`、`control-disabled`、`control-action-invalid`、`control-confirm-required`、`control-restart-disabled`、`control-unavailable`、`login-url-invalid`、`open-invalid`、`open-expired`、`peer-conflict`、`peer-limit`、`batch-invalid`、`batch-empty`、`batch-too-many`、`auth`、`timeout`、`unreachable`、`http-status`、`bad-json`、`protocol-missing`、`remote-unhealthy`、`unknown-endpoint`、`rate-limited`、`unauthorized`、`body-too-large`、`bad-json`。
+
+## 14. 插件内升级（v0.7.0）
+
+- **来源**：`GET https://api.github.com/repos/qingshuiliuyun/dsh-node-monitor/tags?per_page=30`，取 semver 最大 tag；5 分钟缓存；失败返回 `error` 不阻塞面板。
+- **RPC**：
+  - `upgradeCheck`（owner）→ `{current, latest, updateAvailable, url, install:{version,source,linked}|null, checkedAt, enabled, error}`。
+  - `upgradeApply`（owner）→ 校验 `version` 严格 `x.y.z` 且大于当前版本；读 `listBundles()` 发现 `link:` 安装直接拒绝（`upgrade-linked`）；否则 `pluginManager.installBundle(<codeload tag tarball>)`，返回 `{target,spec,result}`。
+- **UI**：版本行 + 检查按钮；有更新时两步确认后显示“升级已提交，重启 DSH 后生效”。
+- **安全**：仅 owner；版本号白名单；链接固定到官方仓库；关闭开关 `selfUpgrade:false`/`DSH_NODE_MONITOR_SELF_UPGRADE=0`。

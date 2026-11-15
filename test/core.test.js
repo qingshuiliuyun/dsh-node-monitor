@@ -41,7 +41,10 @@ import {
   toPersistedState,
   validateBatchRequest,
   validateControlRequest,
-  validateNodeInput
+  validateNodeInput,
+  compareVersions,
+  pickLatestTag,
+  cleanVersion
 } from '../lib/core.js'
 
 const node = (overrides = {}) => ({
@@ -604,4 +607,16 @@ test('只读快照：清空会话明细与最近事件，控制状态强制关�
   assert.deepEqual(snapshot.recent, [])
   assert.equal(snapshot.host.hostname, 'pc-1')
   assert.equal(snapshot.metrics.cpuPct, 10)
+})
+
+test('版本工具：语义化比较、标签挑选与清洗', () => {
+  assert.equal(compareVersions('0.6.10', '0.6.9'), 1)
+  assert.equal(compareVersions('v0.7.0', '0.6.9'), 1)
+  assert.equal(compareVersions('0.6.8', '0.6.8'), 0)
+  assert.equal(compareVersions('0.5.9', '0.6.0'), -1)
+  assert.equal(pickLatestTag(['v0.6.8', 'v0.7.0', 'v0.6.10', 'junk', 'v0.7.0-beta']), '0.7.0')
+  assert.equal(pickLatestTag([]), '')
+  assert.equal(cleanVersion('v0.7.1'), '0.7.1')
+  assert.equal(cleanVersion('0.7'), '')
+  assert.equal(cleanVersion('v1.2.3.4'), '')
 })

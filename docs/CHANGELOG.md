@@ -1,3 +1,12 @@
+## v0.7.0 — 2026-11-15（插件内检查更新与一键升级）
+
+- 面板「本机配对信息」新增插件版本行：显示当前版本、「检查更新」按钮。
+- 宿主新增 RPC `upgradeCheck`（读 GitHub tags，5 分钟缓存，返回 current/latest/updateAvailable/install 信息）与 `upgradeApply`（owner-only，校验版本递增后调用 `pluginManager.installBundle(<codeload tarball>)`）。
+- 「升级」为两步确认；升级提交后提示“重启 DSH 后生效”。
+- 开发模式（profile 依赖为 `link:`）自动拒绝自升级，避免把 link 替换成 tarball 副本。
+- 可用 `selfUpgrade:false` 或 `DSH_NODE_MONITOR_SELF_UPGRADE=0` 关闭自升级。
+- 测试：53/53（31 单元 + 22 集成）。
+
 ## v0.6.8 — 2026-11-15（浏览器跨站请求防护）
 
 - 所有会改变状态的 HTTP 路由（pair/control/hub push/hub result）新增两道门：

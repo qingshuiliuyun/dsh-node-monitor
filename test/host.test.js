@@ -280,7 +280,7 @@ test('宿主：agent 端点鉴权、健康检查与快照契约', async () => {
     await diagnose(mockReq(host.secrets.agentToken), diag)
     assert.equal(diag.statusCode, 200)
     const info = diag.json()
-    assert.equal(info.version, '0.6.8')
+    assert.equal(info.version, '0.7.0')
     assert.equal(typeof info.memory.heapUsed, 'number')
     assert.equal(typeof info.uptimeSec, 'number')
     assert.equal(info.nodes, 1)
@@ -1242,6 +1242,55 @@ test('自动配对限流、publicUrl 校验与自动节点上限', async () => {
   } finally {
     await host.dispose()
     for (const cleanup of cleanups) await cleanup()
+    await fsp.rm(home, { recursive: true, force: true })
+  }
+})
+
+test('自查更新：读取 GitHub tags、比较版本，并调用插件管理器升级', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-upgrade-'))
+  const calls = []
+  const pluginManager = {
+    async listBundles() {
+      return [{ name: 'dsh-node-monitor', version: '0.7.0', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
+    },
+    async installBundle(spec) {
+      calls.push(spec)
+      return { stage: 'enable', target: 'dsh-node-monitor', changed: true, application: 'applied' }
+    }
+  }
+  const { ctx, rpc, cleanups } = fakeContext('http://127.0.0.1:3996', { pluginManager })
+  const host = new NodeMonitorHost(ctx, { home })
+  const originalFetch = globalThis.fetch
+  try {
+    await host.start()
+    await delay(50)
+    globalThis.fetch = async (url) => {
+      assert.ok(String(url).includes('/tags'))
+      return { ok: true, json: async () => [{ name: 'v0.9.9' }, { name: 'v0.9.8' }, { name: 'v0.9.10' }] }
+    }
+    const info = await rpc.get(RPC_CHANNEL)('upgradeCheck', {}, undefined, owner)
+    assert.equal(info.ok, true)
+    assert.equal(info.value.latest, '0.9.10')
+    assert.equal(info.value.updateAvailable, true)
+    assert.equal(info.value.current, '0.7.0')
+    assert.equal(info.value.install.linked, false)
+
+    const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.9.10' }, undefined, owner)
+    assert.equal(applied.ok, true)
+    assert.equal(applied.value.target, '0.9.10')
+    assert.ok(calls[0].includes('refs/tags/v0.9.10'))
+
+    const stale = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.6.8' }, undefined, owner)
+    assert.equal(stale.ok, false)
+    assert.match(stale.error.code, /upgrade-current/)
+
+    const browser = { principal: { kind: 'browser' } }
+    const denied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.9.10' }, undefined, browser)
+    assert.equal(denied.ok, false)
+  } finally {
+    globalThis.fetch = originalFetch
+    await host.dispose()
+    for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
     await fsp.rm(home, { recursive: true, force: true })
   }
 })

@@ -28,7 +28,7 @@ Body:
 > - Optional DSH-layer ops (disabled by default): list/toggle plugins and restart, `dryRun` default, `confirm` required, JSONL audit at `~/.dsh/node-monitor/audit.jsonl` (0600).
 > - Filters, tags, alert deep links and batch probe/enable/disable.
 > - `package.json` declares `dsh.bundle.patch` + `dsh.client` (platform: web); host half never imports other client packages; tests 51/51 (`node --test`), verified across two real DSH instances.
-- Security hardening (v0.6.6–v0.6.8, incl. browser origin/content-type guard): auto-pair rate limits + auto-node cap, hub command results bound to `nodeId`, http(s)-only `publicUrl`, join/invite link validation, QR SVG whitelist, periodic cleanup of counters/queues.
+- Security hardening (v0.6.6–v0.7.0, incl. browser origin/content-type guard): auto-pair rate limits + auto-node cap, hub command results bound to `nodeId`, http(s)-only `publicUrl`, join/invite link validation, QR SVG whitelist, periodic cleanup of counters/queues.
 - Docs: `README.md` / `README.en.md`, `DESIGN.md`, `docs/SECURITY.md`, `docs/CHANGELOG.md`, `docs/ARCHITECTURE-DECISIONS.md`, `docs/INSTALL.md`.
 
 Checklist:
@@ -36,5 +36,5 @@ Checklist:
 - [x] `dsh.bundle` manifest declared in `package.json`
 - [x] No runtime dependencies (`dependencies` empty)
 - [x] Load safety: `apply()` returns a disposer immediately; 1.5s mount window; PanelBoundary
-- [x] Tests pass (`npm test` → 50/50)
+- [x] Tests pass (`npm test` → 51/51)
 - [x] Icon hosted on GitHub (raw PNG at `assets/icon-180.png`)
