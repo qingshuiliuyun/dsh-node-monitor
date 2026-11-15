@@ -280,7 +280,7 @@ test('宿主：agent 端点鉴权、健康检查与快照契约', async () => {
     await diagnose(mockReq(host.secrets.agentToken), diag)
     assert.equal(diag.statusCode, 200)
     const info = diag.json()
-    assert.equal(info.version, '0.7.1')
+    assert.equal(info.version, '0.7.2')
     assert.equal(typeof info.memory.heapUsed, 'number')
     assert.equal(typeof info.uptimeSec, 'number')
     assert.equal(info.nodes, 1)
@@ -1251,7 +1251,7 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
   const calls = []
   const pluginManager = {
     async listBundles() {
-      return [{ name: 'dsh-node-monitor', version: '0.7.1', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
+      return [{ name: 'dsh-node-monitor', version: '0.7.2', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
     },
     async installBundle(spec) {
       calls.push(spec)
@@ -1272,7 +1272,7 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
     assert.equal(info.ok, true)
     assert.equal(info.value.latest, '0.9.10')
     assert.equal(info.value.updateAvailable, true)
-    assert.equal(info.value.current, '0.7.1')
+    assert.equal(info.value.current, '0.7.2')
     assert.equal(info.value.install.linked, false)
 
     const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.9.10' }, undefined, owner)
@@ -1291,6 +1291,52 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
     globalThis.fetch = originalFetch
     await host.dispose()
     for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
+    await fsp.rm(home, { recursive: true, force: true })
+  }
+})
+
+test('本机节点：自动创建，删除后可一键恢复，端口变化时更新地址', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-self-'))
+  const first = fakeContext('http://127.0.0.1:3996')
+  const host = new NodeMonitorHost(first.ctx, { home })
+  try {
+    await host.start()
+    const owner = { principal: { kind: 'owner' } }
+    const initial = await host.handleRpc('state', {}, undefined, owner)
+    assert.equal(initial.ok, true)
+    const self = initial.value.nodes.find((node) => node.id === 'self-loopback')
+    assert.ok(self, 'self node should exist after start')
+    assert.equal(self.baseUrl, 'http://127.0.0.1:3996')
+    assert.deepEqual(self.tags, ['self'])
+
+    const removed = await host.handleRpc('removeNode', { id: 'self-loopback' }, undefined, owner)
+    assert.equal(removed.ok, true)
+    assert.equal(removed.value.nodes.some((node) => node.id === 'self-loopback'), false)
+
+    const added = await host.handleRpc('addSelf', {}, undefined, owner)
+    assert.equal(added.ok, true)
+    const restored = added.value.nodes.filter((node) => node.id === 'self-loopback')
+    assert.equal(restored.length, 1)
+    assert.equal(restored[0].baseUrl, 'http://127.0.0.1:3996')
+
+    const twice = await host.handleRpc('addSelf', {}, undefined, owner)
+    assert.equal(twice.value.nodes.filter((node) => node.id === 'self-loopback').length, 1)
+
+    await host.dispose()
+    for (const cleanup of first.cleanups) await Promise.resolve(cleanup()).catch(() => {})
+
+    const second = fakeContext('http://127.0.0.1:3997')
+    const next = new NodeMonitorHost(second.ctx, { home })
+    await next.start()
+    const state2 = await next.handleRpc('state', {}, undefined, owner)
+    const self2 = state2.value.nodes.find((node) => node.id === 'self-loopback')
+    assert.ok(self2, 'self node should be restored')
+    assert.equal(self2.baseUrl, 'http://127.0.0.1:3997')
+    await next.dispose()
+    for (const cleanup of second.cleanups) await Promise.resolve(cleanup()).catch(() => {})
+  } finally {
+    await Promise.resolve(host.dispose()).catch(() => {})
+    for (const cleanup of first.cleanups) await Promise.resolve(cleanup()).catch(() => {})
     await fsp.rm(home, { recursive: true, force: true })
   }
 })

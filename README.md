@@ -12,9 +12,9 @@
 - 运维控制默认关闭；只读令牌、dry-run、二次确认、审计日志、限流
 
 仓库：<https://github.com/qingshuiliuyun/dsh-node-monitor>  
-当前版本：**v0.7.1**（2026-11-14）  
+当前版本：**v0.7.2**（2026-11-15）  
 测试：`npm test` → **51/51**（30 单测 + 20 集成）  
-安装包：`dsh-node-monitor-dist/dsh-node-monitor-0.7.0.zip` / `.tgz` 或 GitHub tag `v0.7.1`
+安装包：`dsh-node-monitor-dist/dsh-node-monitor-0.7.2.zip` / `.tgz` 或 GitHub tag `v0.7.2`
 
 ---
 
@@ -73,7 +73,7 @@
 DSH →「插件」→「添加插件」→ 粘贴以下任一地址 → 安装 → **重启 DSH**：
 
 ```
-https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.7.1
+https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.7.2
 ```
 
 也支持直接填 GitHub 仓库地址 `https://github.com/qingshuiliuyun/dsh-node-monitor`（会拉默认分支）。
@@ -125,7 +125,7 @@ dsh plugin add /绝对路径/dsh-node-monitor
 
 ### 3. 没有服务器：接入码 + 虚拟局域网 / IPv6
 
-1. 两台都装 v0.7.1 并重启。
+1. 两台都装 v0.7.2 并重启。
 2. A：「本机配对信息」→「接入码」→ 选一个本机地址（局域网 IP / Tailscale 100.x / IPv6）。
 3. 复制接入链接（或让对方扫二维码）。
 4. B：「添加节点」→ 把链接粘贴到**节点地址**输入框 → 地址和令牌自动填好 → 保存。
@@ -154,11 +154,20 @@ dsh plugin add /绝对路径/dsh-node-monitor
 - 本地 `link:` 安装（开发模式）会拒绝自升级，避免覆盖开发目录；关闭开关：`selfUpgrade: false` 或 `DSH_NODE_MONITOR_SELF_UPGRADE=0`。
 - 离线环境检查会失败并给出 GitHub Releases 链接，可手动下载。
 
+## 全自动与本机节点（v0.7.2）
+
+- **本机节点自动出现**：插件启动后自动创建/修复「本机自检节点」；DSH 端口变化时自动更新地址；误删后下个采集周期自动恢复，也可在「设置 → 连接 → 添加/修复本机节点」手动触发。
+- **同一局域网全自动**：装好插件即可。插件通过 UDP 广播发现彼此，自动交换**只读令牌**并双向接入（标签「自动」「双向」），不需要填地址、端口或令牌。
+- **远程电脑只需一次粘贴**：在「设置 → 连接 → 接入码」生成一条链接/二维码，对方粘贴即可；或使用「远程主节点」（需一台常开设备）。
+- **手动添加已简化**：表单默认只显示 名称（可留空）、地址、令牌；适配器、健康路径、网络、备注、标签收进「高级选项」，一般保持默认。
+- **发现不到怎么办**：确认两台在同一网段；Windows 防火墙允许 UDP 45871（发现）与 TCP 45873（探测/配对）；路由器未开启 AP/访客隔离。仍不行可手动添加 `http://对方IP:45873` + 对方「连接令牌」。
+
 ## 界面说明
 
 - **左侧栏**：图标颜色=汇总状态（红：严重告警/有节点离线；黄：有告警/异常；绿：全部在线；灰：未知）。
 - **总览**：汇总 chips、告警列表（确认/全部确认/打开节点）、节点卡片（CPU/内存/磁盘、会话、延迟）、筛选（关键字/状态/分组）、批量栏（探测/启用/停用）、事件流。
 - **节点详情**：状态、探测/编辑/删除、指标、主机信息、会话概览（只读）、运维控制（默认关闭）、告警、节点事件、协议与主机信息。
+- **设置抽屉**：连接（令牌/本机节点/版本升级/接入码）、远程（Hub）、发现（自动接入）、通用（刷新/告警/文档）。
 - **本机配对信息**：节点 ID、显示名（可改）、连接令牌（显示/复制/重新生成）、接入码（多地址 + 二维码）。
 - **局域网发现**：广播到的节点、已接入/接入。
 - **远程主节点**：未连接时填地址+令牌；已连接显示状态；Hub 侧显示加入地址/令牌、已接入数量、复制加入链接、二维码。
@@ -249,17 +258,21 @@ UDP 发现：45871，组播 `239.255.43.21`，30s 一次，TTL 5 分钟，字段
 | --- | --- |
 | ![](docs/screenshots/remote-hub.png) | ![](docs/screenshots/join-qr.png) |
 
+| 全自动与本机节点 | 简化的添加表单 |
+| --- | --- |
+| ![](docs/screenshots/ui-self-auto.png) | ![](docs/screenshots/ui-add-simple.png) |
+
 ## 开发与测试
 
 ```bash
-npm test                 # 51/51
+npm test                 # 54/54
 node --test --test-force-exit test/core.test.js
 node --test --test-force-exit test/host.test.js
 ```
 
 - 无运行时依赖；二维码使用内置 `lib/qrcode.js`（qrcode-generator 2.0.4，MIT）。
 - 目录：`lib/core.js`（纯逻辑/协议）、`lib/index.js`（宿主）、`lib/client.js`（浏览器 bundle）、`lib/qrcode.js`。
-- 测试：`test/core.test.js`（30）、`test/host.test.js`（18，含真实 `node:http` 往返）。
+- 测试：`test/core.test.js`（31）、`test/host.test.js`（23，含真实 `node:http` 往返）。
 
 ## 故障排查
 

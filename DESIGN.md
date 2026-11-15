@@ -1,6 +1,6 @@
 # dsh-node-monitor 设计文档
 
-> 适用版本：**v0.7.1**（2026-11-14）。本文是架构与协议规格；安装步骤见 [docs/INSTALL.md](docs/INSTALL.md)，安全细节见 [docs/SECURITY.md](docs/SECURITY.md)，关键取舍见 [docs/ARCHITECTURE-DECISIONS.md](docs/ARCHITECTURE-DECISIONS.md)，版本历史见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
+> 适用版本：**v0.7.2**（2026-11-15）。本文是架构与协议规格；安装步骤见 [docs/INSTALL.md](docs/INSTALL.md)，安全细节见 [docs/SECURITY.md](docs/SECURITY.md)，关键取舍见 [docs/ARCHITECTURE-DECISIONS.md](docs/ARCHITECTURE-DECISIONS.md)，版本历史见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 1. 目标与非目标
 
@@ -63,6 +63,7 @@
 | v0.6.5 | 文档补充 | 架构决策记录（ADR）与英文 README |
 | v0.6.6 | 健壮性修复 | 自动配对限流、Hub 结果绑定、publicUrl/链接校验、SVG 白名单、计数与队列清理 |
 | v0.7.1 | 排查支持 | 探测并发 6、重复地址合并、`/diagnose` 诊断端点、堆超限告警日志 |
+| v0.7.2 | 零参数体验 | 本机节点自愈、`addSelf`/`pairDiscovered` RPC、添加表单基础/高级分层、发现列表一键自动接入 |
 
 ## 4. 总体架构
 
@@ -345,3 +346,12 @@ owner（DSH Cookie） ──RPC──▶ 宿主
   - `upgradeApply`（owner）→ 校验 `version` 严格 `x.y.z` 且大于当前版本；读 `listBundles()` 发现 `link:` 安装直接拒绝（`upgrade-linked`）；否则 `pluginManager.installBundle(<codeload tag tarball>)`，返回 `{target,spec,result}`。
 - **UI**：版本行 + 检查按钮；有更新时两步确认后显示“升级已提交，重启 DSH 后生效”。
 - **安全**：仅 owner；版本号白名单；链接固定到官方仓库；关闭开关 `selfUpgrade:false`/`DSH_NODE_MONITOR_SELF_UPGRADE=0`。
+
+
+## 16. 全自动与本机节点（v0.7.2）
+
+- **本机节点自愈**：`ensureSelfNode()` 在 `attachWeb` 完成与每个 `tick()` 调用；按 `tags` 含 `self` 查找，存在则校正 `baseUrl` 为当前 `safeOrigin()`（DSH 端口变化自动跟随），不存在则用 `makeSelfNode()` 创建。旧逻辑只在「首次且节点列表为空」时创建，用户先加远端节点或启动时 origin 未就绪就永久缺失。
+- **RPC**：`addSelf`（owner）→ `ensureSelfNode` + `saveNow` + 返回 state；`pairDiscovered`（owner）→ 按 id 查当前发现条目，调用 `tryAutoPair`（仅交换 `statusToken`，只读），成功后返回 state，失败映射 `discovery-not-found`/`discovery-no-port`/`pair-failed`。
+- **UI 简化**：NodeModal 只展示 名称/地址/令牌，其余收进 `<details>`「高级选项」；空态提供「添加本机节点」；发现条目提供「自动接入」（无需令牌）与「手动填写」；设置抽屉连接页提供「添加/修复本机节点」；副标题与提示文案说明自动行为。
+- **发现地址**：快照增加 `agentAddress`（`http://host:agentPort`），列表直接显示可探测的 agent 地址，而不是 DSH 网页端口。
+- **测试**：`test/core.test.js` 31、`test/host.test.js` 23（新增本机节点自愈/恢复/端口跟随），合计 54/54。

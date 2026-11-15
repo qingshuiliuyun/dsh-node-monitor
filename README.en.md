@@ -12,9 +12,9 @@ English | [简体中文](README.md)
 - Ops control is off by default; read-only tokens, dry-run, confirmation, audit log and rate limits
 
 Repository: <https://github.com/qingshuiliuyun/dsh-node-monitor>  
-Current version: **v0.7.1** (2026-11-14)  
+Current version: **v0.7.2** (2026-11-15)  
 Tests: `npm test` → **51/51** (30 unit + 21 integration)  
-Packages: `dsh-node-monitor-dist/dsh-node-monitor-0.7.0.zip` / `.tgz`, or GitHub tag `v0.7.1`
+Packages: `dsh-node-monitor-dist/dsh-node-monitor-0.7.2.zip` / `.tgz`, or GitHub tag `v0.7.2`
 
 ---
 
@@ -73,7 +73,7 @@ Four typical topologies:
 DSH → **Plugins** → **Add plugin** → paste one of the URLs below → install → **restart DSH**:
 
 ```
-https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.7.1
+https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.7.2
 ```
 
 The repository URL `https://github.com/qingshuiliuyun/dsh-node-monitor` also works (default branch).
@@ -125,7 +125,7 @@ Best when you have an always-on old PC, NAS or cloud server.
 
 ### 3. No server: invite links + virtual LAN / IPv6
 
-1. Install v0.7.1 on both machines and restart.
+1. Install v0.7.2 on both machines and restart.
 2. On A: **Local pairing info** → **Invite** → pick an address (LAN IP / Tailscale 100.x / IPv6).
 3. Copy the invite link (or let the other side scan the QR code).
 4. On B: **Add node** → paste the link into the **node address** field → address and token are filled in → save.
@@ -145,7 +145,13 @@ If the panel is reached through a domain (HTTPS reverse proxy), configure:
 
 Otherwise generated join links and QR codes point at `127.0.0.1`. The proxy only needs to forward `/` to the DSH port; 45873 is an optional direct port.
 
-## UI guide
+## Fully automatic & local node (v0.7.2)
+
+- **Local node appears automatically**: the plugin creates/repairs the loopback node on startup, updates its address when the DSH port changes, and restores it if deleted.
+- **Same-LAN auto-connect**: install the plugin and you are done. UDP discovery, automatic exchange of read-only tokens, and two-way pairing (tags "auto"/"bidirectional") — no address, port or token to type.
+- **Remote hosts**: paste one invite link/QR once; or use the remote-hub mode with an always-on host.
+- **Manual add is simpler**: the form shows name (optional), address and token; adapter, health path, network, notes and tags live under "Advanced options".
+- **If nothing is discovered**: same subnet; allow UDP 45871 and TCP 45873 on Windows Firewall; disable AP/client isolation. Fallback: add `http://peer-ip:45873` with the peer connection token.
 
 - **Sidebar**: icon colour is the aggregate state (red: critical alert / offline node; amber: alerts or degraded; green: all online; grey: unknown).
 - **Overview**: summary chips, alert list (ack / ack all / open node), node cards (CPU/memory/disk, sessions, latency), filters (keyword/state/tag), batch bar (probe/enable/disable), event feed.
@@ -244,7 +250,7 @@ UDP discovery: 45871, multicast `239.255.43.21`, every 30s, 5-minute TTL; fields
 ## Development and tests
 
 ```bash
-npm test                 # 51/51
+npm test                 # 54/54
 node --test --test-force-exit test/core.test.js
 node --test --test-force-exit test/host.test.js
 ```
