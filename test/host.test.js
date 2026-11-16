@@ -9,7 +9,7 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { NodeMonitorHost, apply } from '../lib/index.js'
-import { AGENT_HEALTH_PATH, AGENT_STATUS_PATH, BRIDGE_PUSH_PATH, BRIDGE_RELAY_PATH, CONTROL_PATH, DIAGNOSE_PATH, HUB_PUSH_PATH, HUB_RESULT_PATH, HUB_RELAY_PATH, OPEN_PATH, PAIR_PATH, PROTOCOL, RPC_CHANNEL, buildAnnouncement } from '../lib/core.js'
+import { AGENT_HEALTH_PATH, AGENT_STATUS_PATH, BRIDGE_PUSH_PATH, BRIDGE_RELAY_PATH, CONTROL_PATH, DIAGNOSE_PATH, HUB_PUSH_PATH, HUB_RESULT_PATH, HUB_RELAY_PATH, OPEN_PATH, PAIR_PATH, PROTOCOL, RPC_CHANNEL, buildAnnouncement, HUB_QUERY_PATH } from '../lib/core.js'
 import { parseNodeLink, buildConnectCode, shortNodeId } from '../lib/core.js'
 
 const owner = { principal: { kind: 'owner' } }
@@ -280,7 +280,7 @@ test('宿主：agent 端点鉴权、健康检查与快照契约', async () => {
     await diagnose(mockReq(host.secrets.agentToken), diag)
     assert.equal(diag.statusCode, 200)
     const info = diag.json()
-    assert.equal(info.version, '0.11.0')
+    assert.equal(info.version, '0.12.0')
     assert.equal(typeof info.memory.heapUsed, 'number')
     assert.equal(typeof info.uptimeSec, 'number')
     assert.equal(info.nodes, 1)
@@ -1251,7 +1251,7 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
   const calls = []
   const pluginManager = {
     async listBundles() {
-      return [{ name: 'dsh-node-monitor', version: '0.11.0', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
+      return [{ name: 'dsh-node-monitor', version: '0.12.0', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
     },
     async installBundle(spec) {
       calls.push(spec)
@@ -1266,19 +1266,19 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
     await delay(50)
     globalThis.fetch = async (url) => {
       assert.ok(String(url).includes('/tags'))
-      return { ok: true, json: async () => [{ name: 'v0.11.1' }, { name: 'v0.9.8' }, { name: 'v0.11.0' }] }
+      return { ok: true, json: async () => [{ name: 'v0.12.1' }, { name: 'v0.9.8' }, { name: 'v0.12.0' }] }
     }
     const info = await rpc.get(RPC_CHANNEL)('upgradeCheck', {}, undefined, owner)
     assert.equal(info.ok, true)
-    assert.equal(info.value.latest, '0.11.1')
+    assert.equal(info.value.latest, '0.12.1')
     assert.equal(info.value.updateAvailable, true)
-    assert.equal(info.value.current, '0.11.0')
+    assert.equal(info.value.current, '0.12.0')
     assert.equal(info.value.install.linked, false)
 
-    const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.11.1' }, undefined, owner)
+    const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.12.1' }, undefined, owner)
     assert.equal(applied.ok, true)
-    assert.equal(applied.value.target, '0.11.1')
-    assert.ok(calls[0].includes('refs/tags/v0.11.1'))
+    assert.equal(applied.value.target, '0.12.1')
+    assert.ok(calls[0].includes('refs/tags/v0.12.1'))
 
     const stale = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.6.8' }, undefined, owner)
     assert.equal(stale.ok, false)
@@ -1594,6 +1594,76 @@ test('连接码：用 节点ID-令牌 在局域网发现缓存中查找并添加
   } finally {
     host.dispose()
     server.close()
+    for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
+    await fsp.rm(home, { recursive: true, force: true })
+  }
+})
+
+test('跨网络连接码：本机找不到时经 Hub 查询并登记为已连接', async () => {
+  const hub = http.createServer((req, res) => {
+    if (req.url === HUB_QUERY_PATH && req.method === 'POST') {
+      let body = ''
+      req.on('data', (chunk) => { body += chunk })
+      req.on('end', () => {
+        const input = JSON.parse(body || '{}')
+        const hit = input.shortId === 'A1B2C3D4'
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, peers: hit ? [{ nodeId: 'a1b2c3d4-9999', name: 'far-peer', role: 'peer', online: true, lastSeen: Date.now() }] : [] }))
+      })
+      return
+    }
+    res.writeHead(404, { 'content-type': 'application/json' })
+    res.end('{}')
+  })
+  await new Promise((resolve) => hub.listen(0, '127.0.0.1', resolve))
+  const hubPort = hub.address().port
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-code-hub-'))
+  const { ctx, cleanups } = fakeContext('http://127.0.0.1:3982')
+  const host = new NodeMonitorHost(ctx, { home })
+  try {
+    await host.start()
+    host.hubLink = { url: `http://127.0.0.1:${hubPort}`, token: 'hub-token-1' }
+    const result = await host.handleRpc('connectCode', { code: 'A1B2C3D4-ABCD-EFGH-IJKL' }, undefined, { principal: { kind: 'owner' } })
+    assert.equal(result.ok, true)
+    const node = result.value.nodes.find((item) => item.id === 'relay:a1b2c3d4-9999')
+    assert.ok(node)
+    assert.equal(node.linked, true)
+    assert.equal(host.secrets.linkedPeers.A1B2C3D4.nodeId, 'a1b2c3d4-9999')
+  } finally {
+    host.dispose()
+    hub.close()
+    for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
+    await fsp.rm(home, { recursive: true, force: true })
+  }
+})
+
+test('主节点查询接口：按短 ID 返回在线对端，令牌错误 401', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-hub-query-'))
+  const { ctx, routes, cleanups } = fakeContext('http://127.0.0.1:3983')
+  const host = new NodeMonitorHost(ctx, { home, hub: true })
+  try {
+    await host.start()
+    host.hubPeers.set('a1b2c3d4-9999', { nodeId: 'a1b2c3d4-9999', name: 'far-peer', hostname: 'far', version: '0.12.0', payload: {}, lastSeen: Date.now(), ip: '10.0.0.9' })
+    const handler = routes.get(HUB_QUERY_PATH)
+    const makeReq = (auth) => ({
+      method: 'POST',
+      headers: { authorization: `Bearer ${auth}`, 'content-type': 'application/json' },
+      socket: { remoteAddress: '127.0.0.1' },
+      on(event, cb) {
+        if (event === 'data') cb(Buffer.from(JSON.stringify({ shortId: 'A1B2C3D4' })))
+        if (event === 'end') cb()
+      }
+    })
+    const res = mockRes()
+    await handler(makeReq(host.secrets.hubToken), res)
+    assert.equal(res.statusCode, 200)
+    assert.equal(res.json().peers.length, 1)
+    assert.equal(res.json().peers[0].name, 'far-peer')
+    const denied = mockRes()
+    await handler(makeReq('nope'), denied)
+    assert.equal(denied.statusCode, 401)
+  } finally {
+    host.dispose()
     for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
     await fsp.rm(home, { recursive: true, force: true })
   }
