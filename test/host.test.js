@@ -10,7 +10,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { NodeMonitorHost, apply } from '../lib/index.js'
 import { AGENT_HEALTH_PATH, AGENT_STATUS_PATH, BRIDGE_PUSH_PATH, BRIDGE_RELAY_PATH, CONTROL_PATH, DIAGNOSE_PATH, HUB_PUSH_PATH, HUB_RESULT_PATH, HUB_RELAY_PATH, OPEN_PATH, PAIR_PATH, PROTOCOL, RPC_CHANNEL, buildAnnouncement } from '../lib/core.js'
-import { parseNodeLink } from '../lib/core.js'
+import { parseNodeLink, buildConnectCode, shortNodeId } from '../lib/core.js'
 
 const owner = { principal: { kind: 'owner' } }
 const browser = { principal: { kind: 'browser' } }
@@ -280,7 +280,7 @@ test('宿主：agent 端点鉴权、健康检查与快照契约', async () => {
     await diagnose(mockReq(host.secrets.agentToken), diag)
     assert.equal(diag.statusCode, 200)
     const info = diag.json()
-    assert.equal(info.version, '0.10.6')
+    assert.equal(info.version, '0.11.0')
     assert.equal(typeof info.memory.heapUsed, 'number')
     assert.equal(typeof info.uptimeSec, 'number')
     assert.equal(info.nodes, 1)
@@ -1251,7 +1251,7 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
   const calls = []
   const pluginManager = {
     async listBundles() {
-      return [{ name: 'dsh-node-monitor', version: '0.10.6', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
+      return [{ name: 'dsh-node-monitor', version: '0.11.0', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
     },
     async installBundle(spec) {
       calls.push(spec)
@@ -1266,19 +1266,19 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
     await delay(50)
     globalThis.fetch = async (url) => {
       assert.ok(String(url).includes('/tags'))
-      return { ok: true, json: async () => [{ name: 'v0.10.7' }, { name: 'v0.9.8' }, { name: 'v0.10.6' }] }
+      return { ok: true, json: async () => [{ name: 'v0.11.1' }, { name: 'v0.9.8' }, { name: 'v0.11.0' }] }
     }
     const info = await rpc.get(RPC_CHANNEL)('upgradeCheck', {}, undefined, owner)
     assert.equal(info.ok, true)
-    assert.equal(info.value.latest, '0.10.7')
+    assert.equal(info.value.latest, '0.11.1')
     assert.equal(info.value.updateAvailable, true)
-    assert.equal(info.value.current, '0.10.6')
+    assert.equal(info.value.current, '0.11.0')
     assert.equal(info.value.install.linked, false)
 
-    const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.10.7' }, undefined, owner)
+    const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.11.1' }, undefined, owner)
     assert.equal(applied.ok, true)
-    assert.equal(applied.value.target, '0.10.7')
-    assert.ok(calls[0].includes('refs/tags/v0.10.7'))
+    assert.equal(applied.value.target, '0.11.1')
+    assert.ok(calls[0].includes('refs/tags/v0.11.1'))
 
     const stale = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.6.8' }, undefined, owner)
     assert.equal(stale.ok, false)
@@ -1553,6 +1553,48 @@ test('打开远程界面：登录材料是对方 127.0.0.1 时自动换成节点
     assert.equal(res.headers.location, 'http://192.168.1.9:3081/?token=abc')
   } finally {
     await host.dispose()
+    await fsp.rm(home, { recursive: true, force: true })
+  }
+})
+
+test('连接码：用 节点ID-令牌 在局域网发现缓存中查找并添加节点', async () => {
+  const server = http.createServer((req, res) => {
+    if (req.url === AGENT_STATUS_PATH && req.headers.authorization === 'Bearer ABCD-EFGH-IJKL') {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ protocol: PROTOCOL, host: { hostname: 'peer-code' }, sessions: { total: 0, running: 0, idle: 0 }, metrics: {}, alerts: [], recent: [] }))
+      return
+    }
+    res.writeHead(401, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ ok: false }))
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-code-'))
+  const { ctx, cleanups } = fakeContext('http://127.0.0.1:3981')
+  const host = new NodeMonitorHost(ctx, { home })
+  try {
+    await host.start()
+    host.discovered = [{
+      id: 'a1b2c3d4-0001',
+      label: 'peer',
+      address: '127.0.0.1',
+      port: 3081,
+      hostname: 'peer',
+      version: '0.0.1',
+      agentPort: port,
+      lastSeen: Date.now()
+    }]
+    const code = buildConnectCode('A1B2C3D4', 'ABCD-EFGH-IJKL')
+    const result = await host.handleRpc('connectCode', { code }, undefined, { principal: { kind: 'owner' } })
+    assert.equal(result.ok, true)
+    const node = result.value.nodes.find((item) => item.baseUrl === `http://127.0.0.1:${port}`)
+    assert.ok(node)
+    assert.ok(node.name)
+    assert.equal(result.value.nodes.length, 2)
+  } finally {
+    host.dispose()
+    server.close()
+    for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
     await fsp.rm(home, { recursive: true, force: true })
   }
 })
