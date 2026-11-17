@@ -280,7 +280,7 @@ test('宿主：agent 端点鉴权、健康检查与快照契约', async () => {
     await diagnose(mockReq(host.secrets.agentToken), diag)
     assert.equal(diag.statusCode, 200)
     const info = diag.json()
-    assert.equal(info.version, '0.14.2')
+    assert.equal(info.version, '0.15.0')
     assert.equal(typeof info.memory.heapUsed, 'number')
     assert.equal(typeof info.uptimeSec, 'number')
     assert.equal(info.nodes, 1)
@@ -688,6 +688,42 @@ test('宿主：批量探测/启用/停用与权限、空选与上限拒绝', asy
 
     const persisted = JSON.parse(await fsp.readFile(path.join(home, 'node-monitor', 'state.json'), 'utf8'))
     assert.equal(persisted.nodes.find((node) => node.id === 'self-loopback').enabled, false)
+  } finally {
+    await host.dispose()
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+  }
+})
+
+
+test('主节点：跨网访问地址可保存/清除，非法地址与无权限被拒绝', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-origin-'))
+  const { ctx, rpc } = fakeContext('http://127.0.0.1:3997')
+  const host = new NodeMonitorHost(ctx, { home, hub: true })
+  try {
+    await host.start()
+    const call = (endpoint, payload = {}, peer = owner) => rpc.get(RPC_CHANNEL)(endpoint, payload, undefined, peer)
+
+    const saved = await call('hubSetOrigin', { url: 'https://dsh.example.com/' })
+    assert.equal(saved.ok, true)
+    assert.equal(saved.value.origin, 'https://dsh.example.com')
+
+    const info = await call('hubInfo', {})
+    assert.equal(info.value.origin, 'https://dsh.example.com')
+
+    const secrets = JSON.parse(await fsp.readFile(path.join(home, 'node-monitor', 'secrets.json'), 'utf8'))
+    assert.equal(secrets.publicUrl, 'https://dsh.example.com')
+
+    const bad = await call('hubSetOrigin', { url: 'ftp://example.com' })
+    assert.equal(bad.ok, false)
+    assert.equal(bad.error.code, 'node-monitor/origin-invalid')
+
+    const denied = await call('hubSetOrigin', { url: 'https://x.example.com' }, browser)
+    assert.equal(denied.ok, false)
+    assert.equal(denied.error.code, 'node-monitor/forbidden')
+
+    const cleared = await call('hubSetOrigin', { url: '' })
+    assert.equal(cleared.ok, true)
+    assert.equal(cleared.value.origin.startsWith('http://127.0.0.1:3997'), true)
   } finally {
     await host.dispose()
     await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
@@ -1251,7 +1287,7 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
   const calls = []
   const pluginManager = {
     async listBundles() {
-      return [{ name: 'dsh-node-monitor', version: '0.14.2', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
+      return [{ name: 'dsh-node-monitor', version: '0.15.0', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
     },
     async installBundle(spec) {
       calls.push(spec)
@@ -1266,19 +1302,19 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
     await delay(50)
     globalThis.fetch = async (url) => {
       assert.ok(String(url).includes('/tags'))
-      return { ok: true, json: async () => [{ name: 'v0.14.3' }, { name: 'v0.9.8' }, { name: 'v0.14.2' }] }
+      return { ok: true, json: async () => [{ name: 'v0.15.1' }, { name: 'v0.9.8' }, { name: 'v0.15.0' }] }
     }
     const info = await rpc.get(RPC_CHANNEL)('upgradeCheck', {}, undefined, owner)
     assert.equal(info.ok, true)
-    assert.equal(info.value.latest, '0.14.3')
+    assert.equal(info.value.latest, '0.15.1')
     assert.equal(info.value.updateAvailable, true)
-    assert.equal(info.value.current, '0.14.2')
+    assert.equal(info.value.current, '0.15.0')
     assert.equal(info.value.install.linked, false)
 
-    const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.14.3' }, undefined, owner)
+    const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.15.1' }, undefined, owner)
     assert.equal(applied.ok, true)
-    assert.equal(applied.value.target, '0.14.3')
-    assert.ok(calls[0].includes('refs/tags/v0.14.3'))
+    assert.equal(applied.value.target, '0.15.1')
+    assert.ok(calls[0].includes('refs/tags/v0.15.1'))
 
     const stale = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.6.8' }, undefined, owner)
     assert.equal(stale.ok, false)

@@ -499,3 +499,13 @@ owner（DSH Cookie） ──RPC──▶ 宿主
   - 设置抽屉「连接设备」按钮先关抽屉再开弹窗，避免两层遮罩叠加。
 - 文档：README 术语表、§3 步骤、连接码/桥接/连接细节、界面说明、截图列表；INSTALL 步骤 3；DESIGN 结构段（两 tab）。
 - 验证脚本 `audit.js`：面板文本「跨网络」计数 0；「打开连接设备」后 active tab 为「主节点网络」；移动端 390×844 弹窗三标签可用；0 console error。
+
+## 26. 跨网访问地址（v0.15.0）
+
+- 问题：`hubBaseUrl()` 之前用 `publicUrl || safeOrigin(ctx)`，未设 `DSH_NODE_MONITOR_PUBLIC_URL` 时得到 `http://127.0.0.1:3081`，这个地址只在本机有效。
+- 方案：A 卡增加「跨网访问地址」输入与保存；宿主新增 `hubSetOrigin({url})`（owner）：
+  - 空值清除；非空必须匹配 `^https?://[^\s/]+`，否则 `origin-invalid`；
+  - 保存到 `secrets.publicUrl`（0600），`hubBaseUrl()` 顺序为 `secrets.publicUrl → publicUrl(env/config) → safeOrigin`；
+  - `hubJoin`/`hubInfo` 随之返回新地址，加入链接与二维码同步变化。
+- 客户端：检测 `127.0.0.1/localhost/10./192.168./172.16-31.` 时显示警告与输入框；保存后刷新 `hubInfo/hubToken` 并 toast。
+- 测试：host 新增保存/清除/非法/无权 4 组断言；65/65。截图 `docs/screenshots/public-address.png`。
