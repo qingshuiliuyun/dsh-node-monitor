@@ -18,6 +18,10 @@ Packages: `dsh-node-monitor-dist/dsh-node-monitor-0.7.3.zip` / `.tgz`, or GitHub
 
 ---
 
+## Connection topology (v0.13.0)
+
+The monitor tab starts with a live topology map: the hub (or this machine) in the center, every connected DSH around it. Solid lines are hub links, dashed lines are direct LAN links; dot colours follow node status, and clicking a node opens its detail page. The layout adapts to the node count, and on mobile the map scrolls horizontally with the hub centred.
+
 ## Features
 
 | Capability | Description | Since |

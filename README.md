@@ -173,6 +173,19 @@ dsh plugin add /绝对路径/dsh-node-monitor
 - 本地 `link:` 安装（开发模式）会拒绝自升级，避免覆盖开发目录；关闭开关：`selfUpgrade: false` 或 `DSH_NODE_MONITOR_SELF_UPGRADE=0`。
 - 离线环境检查会失败并给出 GitHub Releases 链接，可手动下载。
 
+## 连接拓扑（v0.13.0）
+
+第一个标签「节点监控」顶部新增**连接拓扑**：中间是主节点（或本机），周围是它连接的所有 DSH；点任意节点直接进入该节点详情。
+
+- **中心**：连了远程主节点时是「云服务器 · Hub」，否则是本机；中心下方标注「主节点 / 本机」。
+- **叶子**：主节点下的其他电脑（实线）、本机同一局域网直连的电脑（虚线），线型即连接方式。
+- **状态点**：绿=在线、黄=不稳定、红=离线、灰=未知，与节点卡片一致；鼠标悬停显示名称/延迟。
+- **规模**：按节点数自动调整高度，最多展示 64 个节点；节点多时自动缩排，标签重名会补端口或短 ID。
+- **移动端**：拓扑可横向滑动，打开时自动把主节点居中；标题和说明自动堆叠。
+- **与卡片的关系**：拓扑只做“看关系”，卡片仍是操作入口；两者使用同一份状态，3 秒同步。
+
+![连接拓扑](docs/screenshots/topology-hub.png)
+
 ## 统一主节点：全网互联（v0.8.0）
 
 ## 统一入口与标签页（v0.10.0）
@@ -326,9 +339,13 @@ UDP 发现：45871，组播 `239.255.43.21`，30s 一次，TTL 5 分钟，字段
 | --- | --- |
 | ![](docs/screenshots/ui-self-auto.png) | ![](docs/screenshots/ui-add-simple.png) |
 
-| 统一主节点全网互联 |
-| --- |
-| ![](docs/screenshots/mesh-hub.png) |
+| 统一主节点全网互联 | 连接拓扑（主节点视角） |
+| --- | --- |
+| ![](docs/screenshots/mesh-hub.png) | ![](docs/screenshots/topology-hub.png) |
+
+| 连接拓扑（PC 视角） | 移动端拓扑 |
+| --- | --- |
+| ![](docs/screenshots/topology-pc.png) | ![](docs/screenshots/topology-mobile.png) |
 
 | 填写示例与令牌显示 | 远程界面说明 |
 | --- | --- |
@@ -337,7 +354,7 @@ UDP 发现：45871，组播 `239.255.43.21`，30s 一次，TTL 5 分钟，字段
 ## 开发与测试
 
 ```bash
-npm test                 # 57/57
+npm test                 # 64/64
 node --test --test-force-exit test/core.test.js
 node --test --test-force-exit test/host.test.js
 ```
