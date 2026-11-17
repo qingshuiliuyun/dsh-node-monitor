@@ -222,7 +222,7 @@ test('宿主：自检节点接入、RPC 权限、节点增删改与持久化', a
     for (const cleanup of cleanups2) cleanup()
   } finally {
     for (const cleanup of cleanups) cleanup()
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -280,7 +280,7 @@ test('宿主：agent 端点鉴权、健康检查与快照契约', async () => {
     await diagnose(mockReq(host.secrets.agentToken), diag)
     assert.equal(diag.statusCode, 200)
     const info = diag.json()
-    assert.equal(info.version, '0.14.1')
+    assert.equal(info.version, '0.14.2')
     assert.equal(typeof info.memory.heapUsed, 'number')
     assert.equal(typeof info.uptimeSec, 'number')
     assert.equal(info.nodes, 1)
@@ -288,7 +288,7 @@ test('宿主：agent 端点鉴权、健康检查与快照契约', async () => {
     assert.equal(JSON.stringify(info).includes(host.secrets.statusToken), false)
   } finally {
     for (const cleanup of cleanups) cleanup()
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -308,7 +308,7 @@ test('宿主：同一地址重复添加会合并为同一个节点', async () =>
     assert.equal(host.secrets.nodeTokens[merged.id], 'tok-b')
   } finally {
     for (const cleanup of cleanups) cleanup()
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -380,7 +380,7 @@ test('宿主：真实 HTTP 往返把远端节点标记为在线', async () => {
   } finally {
     for (const cleanup of cleanups) cleanup()
     await new Promise((resolve) => server.close(resolve))
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -507,7 +507,7 @@ test('Hub：登录材料只写入 secrets，一次性票据 302 打开，重放�
     assert.equal(bad.error.code, 'node-monitor/login-url-invalid')
   } finally {
     await host.dispose()
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -536,7 +536,7 @@ test('控制面默认关闭：/control 返回 control-disabled，审计为空', 
   )
   assert.equal(res.statusCode, 403)
   assert.equal(res.json().error, 'control-disabled')
-  await fsp.rm(home, { recursive: true, force: true })
+  await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
 })
 
 test('控制面：dryRun 不调用插件服务，真实执行写审计且不含令牌', async () => {
@@ -609,7 +609,7 @@ test('控制面：dryRun 不调用插件服务，真实执行写审计且不含�
   assert.equal(audit.includes('dryRun'), true)
   const mode = (await fsp.stat(host.auditFile)).mode & 0o777
   assert.equal(mode, 0o600)
-  await fsp.rm(home, { recursive: true, force: true })
+  await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
 })
 
 test('控制面：restart 未确认/未允许都不执行，允许后返回 202', async () => {
@@ -642,7 +642,7 @@ test('控制面：restart 未确认/未允许都不执行，允许后返回 202'
   assert.equal(noConfirm.payload.error, 'control-confirm-required')
   // 不放行真正的 process.exit：只校验通过校验器，不触发 202 分支
   host.disposed = true
-  await fsp.rm(home, { recursive: true, force: true })
+  await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
 })
 
 test('宿主：批量探测/启用/停用与权限、空选与上限拒绝', async () => {
@@ -690,7 +690,7 @@ test('宿主：批量探测/启用/停用与权限、空选与上限拒绝', asy
     assert.equal(persisted.nodes.find((node) => node.id === 'self-loopback').enabled, false)
   } finally {
     await host.dispose()
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -748,7 +748,7 @@ test('局域网发现：只接收公开身份、来源地址优先、接入后�
   assert.equal(saved.agentToken, rotated.value.token)
 
   for (const cleanup of cleanups) await cleanup()
-  await fsp.rm(home, { recursive: true, force: true })
+  await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
 })
 
 test('双向配对：接收对端登记（Bearer 校验、来源地址限制、自动建节点）', async () => {
@@ -1006,10 +1006,10 @@ test('远程主节点：PC 主动上报、Hub 投影节点、控制指令往返'
     assert.equal(badToken.statusCode, 401)
 
     for (const cleanup of cleanups) await cleanup()
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   } catch (error) {
     for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
-    await fsp.rm(home, { recursive: true, force: true }).catch(() => {})
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }).catch(() => {})
     throw error
   }
 })
@@ -1093,7 +1093,7 @@ test('自动配对只交换只读令牌：状态可读但无明细，控制被�
     else process.env.DSH_NODE_MONITOR_AUTO_PAIR = previous
     await host.dispose()
     for (const cleanup of cleanups) await cleanup()
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -1141,7 +1141,7 @@ test('Hub 投影去重：已通过局域网直连的同一台机器不再重复�
   } finally {
     await host.dispose()
     for (const cleanup of cleanups) await cleanup()
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -1188,7 +1188,7 @@ test('远程主节点：命令结果必须由对应节点回传', async () => {
   } finally {
     await host.dispose()
     for (const cleanup of cleanups) await cleanup()
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -1242,7 +1242,7 @@ test('自动配对限流、publicUrl 校验与自动节点上限', async () => {
   } finally {
     await host.dispose()
     for (const cleanup of cleanups) await cleanup()
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -1251,7 +1251,7 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
   const calls = []
   const pluginManager = {
     async listBundles() {
-      return [{ name: 'dsh-node-monitor', version: '0.14.1', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
+      return [{ name: 'dsh-node-monitor', version: '0.14.2', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
     },
     async installBundle(spec) {
       calls.push(spec)
@@ -1266,19 +1266,19 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
     await delay(50)
     globalThis.fetch = async (url) => {
       assert.ok(String(url).includes('/tags'))
-      return { ok: true, json: async () => [{ name: 'v0.14.2' }, { name: 'v0.9.8' }, { name: 'v0.14.1' }] }
+      return { ok: true, json: async () => [{ name: 'v0.14.3' }, { name: 'v0.9.8' }, { name: 'v0.14.2' }] }
     }
     const info = await rpc.get(RPC_CHANNEL)('upgradeCheck', {}, undefined, owner)
     assert.equal(info.ok, true)
-    assert.equal(info.value.latest, '0.14.2')
+    assert.equal(info.value.latest, '0.14.3')
     assert.equal(info.value.updateAvailable, true)
-    assert.equal(info.value.current, '0.14.1')
+    assert.equal(info.value.current, '0.14.2')
     assert.equal(info.value.install.linked, false)
 
-    const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.14.2' }, undefined, owner)
+    const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.14.3' }, undefined, owner)
     assert.equal(applied.ok, true)
-    assert.equal(applied.value.target, '0.14.2')
-    assert.ok(calls[0].includes('refs/tags/v0.14.2'))
+    assert.equal(applied.value.target, '0.14.3')
+    assert.ok(calls[0].includes('refs/tags/v0.14.3'))
 
     const stale = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.6.8' }, undefined, owner)
     assert.equal(stale.ok, false)
@@ -1291,7 +1291,7 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
     globalThis.fetch = originalFetch
     await host.dispose()
     for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -1337,7 +1337,7 @@ test('本机节点：自动创建，删除后可一键恢复，端口变化时�
   } finally {
     await Promise.resolve(host.dispose()).catch(() => {})
     for (const cleanup of first.cleanups) await Promise.resolve(cleanup()).catch(() => {})
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -1404,7 +1404,7 @@ test('统一主节点：PC 看到全网节点，并经主节点转发控制', as
   } finally {
     await host.dispose()
     await new Promise((resolve) => hub.close(resolve))
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -1474,7 +1474,7 @@ test('局域网桥接：Hub 侧给配对节点发桥接令牌，并接收其经�
   } finally {
     host.dispose()
     for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -1531,7 +1531,7 @@ test('局域网桥接：未连 Hub 的节点经桥接节点上报并获得全网
     host.dispose()
     server.close()
     for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -1553,7 +1553,7 @@ test('打开远程界面：登录材料是对方 127.0.0.1 时自动换成节点
     assert.equal(res.headers.location, 'http://192.168.1.9:3081/?token=abc')
   } finally {
     await host.dispose()
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -1595,7 +1595,7 @@ test('连接码：用 节点ID-令牌 在局域网发现缓存中查找并添加
     host.dispose()
     server.close()
     for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -1633,7 +1633,7 @@ test('跨网络连接码：本机找不到时经 Hub 查询并登记为已连接
     host.dispose()
     hub.close()
     for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -1665,6 +1665,6 @@ test('主节点查询接口：按短 ID 返回在线对端，令牌错误 401', 
   } finally {
     host.dispose()
     for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
-    await fsp.rm(home, { recursive: true, force: true })
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
