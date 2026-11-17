@@ -475,3 +475,9 @@ owner（DSH Cookie） ──RPC──▶ 宿主
 - 默认可见：`hubReveal` 初始 true；SelfPanel 挂载即取令牌（`revealToken`），连接令牌与连接码默认明文，行内提供 隐藏/复制；仍保留“重新生成”但带确认提示。
 - 文案：`token.hint` 改为“可随时查看/复制”；面板标题改为「跨网络（主节点 ↔ 子节点）」，A 卡注明“只在主节点电脑上用”。
 - 测试 64/64；截图 `docs/screenshots/roles.png`、`token-visible.png`。
+
+## 23. 「添加节点」与「跨网络」的边界（v0.13.2）
+
+- 两种入口语义不同：`添加节点` = 点对点 `nodes[]` 一台；`跨网络` = hub 关系或 hub 模式，PC 通过 `/hub/push` 投影出所有 peer。
+- UI：NodeModal 顶部新增 `.nm-scope-note`（虚线框 + 说明 + 「打开跨网络设置」按钮，调用 `closeModal(); openSettings('remote')`）；HubPanel B 卡说明“连接后自动出现该主节点下的所有电脑，不用逐台添加”。
+- 目的：消除“跨网络不就是添加节点吗”的误解，减少用户在主节点网络场景下逐台添加。
