@@ -38,6 +38,20 @@ Packages: `dsh-node-monitor-dist/dsh-node-monitor-0.7.3.zip` / `.tgz`, or GitHub
 | Serverless invite links | `http://<LAN/Tailscale/IPv6>:45873` + token in one link | v0.6.2 |
 | Security hardening | Read-only token, hub command expiry, peer caps, request timeouts, audit rotation | v0.6.3 |
 
+## Names and terms
+
+One name per concept across the UI:
+
+| Name | What it is | Used for | Where to get / fill |
+|---|---|---|---|
+| **Connection token** | Password for peer-to-peer plugin access (`agentToken`) | Adding nodes, status/control, pairing | Peer: Settings → Connect → Connection token |
+| **Join token** | Password to attach this machine to a hub (`hubToken`) | Settings → Cross-network | Hub: Settings → Cross-network → Join token |
+| **Connect code** | Node ID + connection token, one code to find and add | Add-node dialog and Settings | Settings → Connect → Connect code |
+| **DSH login link** | The peer DSH web URL with `?token=…` | Opening/embedding the peer UI | URL printed when the peer starts DSH |
+| **Invite link** | Local address + connection token as a link/QR | Let others add this machine | Settings → Connect → Invite link |
+
+Rules: connection token = peer-to-peer only; join token = PC → hub only; connect code is a human-friendly code, not a new credential; DSH login link only opens the web UI. The UI only shows masks; full values live on the host in `~/.dsh/node-monitor/secrets.json` (0600).
+
 ## Architecture at a glance
 
 ```

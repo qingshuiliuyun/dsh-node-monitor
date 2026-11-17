@@ -370,7 +370,7 @@ owner（DSH Cookie） ──RPC──▶ 宿主
 - **测试**：54/54；令牌容错、界面断言通过；无协议变更。
 
 
-## 17. 统一主节点：全网互联（v0.8.0）
+## 18. 统一主节点：全网互联（v0.8.0）
 
 - **目标**：所有 PC 连同一个 Hub 后，每台 PC 都能看到全部节点（星型控制面、逻辑全网），而不是只有 Hub 能看到所有 PC。
 - **Hub 侧**：
@@ -387,29 +387,45 @@ owner（DSH Cookie） ──RPC──▶ 宿主
 - **测试**：core 33（新增 `validateHubRelay`、`sanitizeHubPeers`），host 24（新增「统一主节点：PC 看到全网节点，并经主节点转发控制」，含 fake Hub HTTP + relay 控制往返），合计 57/57。
 - **限制**：mesh 卡片 3 秒级状态、不代理完整 DSH 协议；relay 控制不支持 restart；同一 nodeId 冲突由 Hub 的 60 秒 IP 绑定缓解。
 
-## 18. 局域网桥接与远程界面（v0.9.0）
+## 19. 局域网桥接与远程界面（v0.9.0）
 
-### 18.1 目标
+### 19.1 目标
 
 - 同一局域网内，只要有一台节点连上 Hub，其余节点无需再配置 Hub 令牌即可获得全网视图与转发控制。
 - 应用内提供远程 DSH 界面入口。
 
-### 18.2 桥接协议
+### 19.2 桥接协议
 
 - 配对响应新增 `bridge:{available,label,through}` 与 `bridgeToken`（随机 18 字节 hex，secrets.bridgeTokens，0600）。
 - 未连 Hub 的局域网节点每 3s `POST /node-monitor/api/v1/bridge/push`（Bearer bridgeToken）；桥接端有 hubLink 则转发 `/hub/push`，自身为 Hub 则写入 `hubPeers`；响应带 `peers`。
 - 控制经 `POST /node-monitor/api/v1/bridge/relay` 转发到 Hub `/hub/relay` 或本机 `controlHubNode`，动作限制同 Hub 中继（不支持 restart）。
 - 关闭：`DSH_NODE_MONITOR_BRIDGE=0` 或 `config.bridge=false`。
 
-### 18.3 远程界面
+### 19.3 远程界面
 
 - 注册第二个 `sidebar.panellist`（`node-monitor-remote`）与同名 `main` 面板。
 - 候选：本机（直接 baseUrl）或已配置登录材料的远端节点；远端通过 `openTicket` 票据 URL，iframe 指向 `/node-monitor/open?...`，宿主 302 到远端带 token 启动地址。
 - 同站可内嵌；跨站（DSH Cookie SameSite=Strict）需新标签或同域反代。
 - `sidebar.workspaces` 为宿主独占 single slot，插件不可追加，故使用并列一级入口。
 
-### 18.4 限制
+### 19.4 限制
 
 - 桥接依赖一台常开的 Hub 客户端；离线时退回本机视图。
 - 远程界面需登录材料；未配置时引导去节点详情。
 - 同域反代需子域名与证书，由部署方配置。
+
+## 20. 术语与命名（v0.12.1）
+
+界面统一用词与宿主字段的对应关系：
+
+| 界面名称 | 宿主字段/存储 | 权限与用途 |
+|---|---|---|
+| 连接令牌 | `secrets.agentToken` | 完整权限：`/status`、`/pair`、`/control`、`/bridge/*` |
+| 只读令牌 | `secrets.statusToken` | 自动配对只读：`/status` 精简、`/control` 拒绝 |
+| 加入令牌 | `secrets.hubToken` | Hub 端：`/hub/push`、`/hub/query`、`/hub/relay` |
+| 桥接令牌 | `secrets.bridgeTokens[nodeId]` | 局域网未连 Hub 的节点经邻居转发 |
+| 连接码 | `shortId` + `agentToken`，不入库 | 一次性粘贴，解析为节点 ID 再查找 |
+| DSH 登录链接 | `secrets.nodeLogins[nodeId]` | 只用于 302 打开对方网页，不参与连接 |
+
+约束：令牌只存在宿主侧 0600 文件；RPC 的 `state` 永不包含令牌，只有显式 `selfToken`/`hubInfo` 返回；界面沿用「连接令牌 / 加入令牌 / 连接码 / DSH 登录链接」四个词，不再使用「代理令牌」「登录材料」。
+
