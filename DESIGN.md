@@ -464,3 +464,14 @@ owner（DSH Cookie） ──RPC──▶ 宿主
 - `npm test` 64/64；拓扑为纯客户端渲染，不新增 RPC。
 - 实机三节点（Hub + 2 PC）：Hub 视角 `3 nodes / 2 edges`、PC 视角 `3 nodes / 2 edges`，点击叶子进入详情，0 console error。
 - 截图：`docs/screenshots/topology-hub.png`、`topology-pc.png`、`topology-mobile.png`。
+
+## 22. 跨网络面板与令牌可见性（v0.13.1）
+
+- 问题：A/B 两个方向共用一个表单，用户不知道地址填主节点还是本机；令牌与连接码默认打码，导致“只能重新生成”，一按就断开已连接设备。
+- 方案：`HubPanel` 拆成两张带序号的卡片：
+  - A「本机当主节点」：加入地址、加入令牌（默认明文，隐藏/复制/重新生成）、加入链接、二维码、已接入数；
+  - B「本机当子节点」：主节点地址 + 加入令牌（带 label），连接/断开。
+  - 顶部一句 `两台电脑二选一：主节点用 A，子节点用 B`。
+- 默认可见：`hubReveal` 初始 true；SelfPanel 挂载即取令牌（`revealToken`），连接令牌与连接码默认明文，行内提供 隐藏/复制；仍保留“重新生成”但带确认提示。
+- 文案：`token.hint` 改为“可随时查看/复制”；面板标题改为「跨网络（主节点 ↔ 子节点）」，A 卡注明“只在主节点电脑上用”。
+- 测试 64/64；截图 `docs/screenshots/roles.png`、`token-visible.png`。
