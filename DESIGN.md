@@ -481,3 +481,11 @@ owner（DSH Cookie） ──RPC──▶ 宿主
 - 两种入口语义不同：`添加节点` = 点对点 `nodes[]` 一台；`跨网络` = hub 关系或 hub 模式，PC 通过 `/hub/push` 投影出所有 peer。
 - UI：NodeModal 顶部新增 `.nm-scope-note`（虚线框 + 说明 + 「打开跨网络设置」按钮，调用 `closeModal(); openSettings('remote')`）；HubPanel B 卡说明“连接后自动出现该主节点下的所有电脑，不用逐台添加”。
 - 目的：消除“跨网络不就是添加节点吗”的误解，减少用户在主节点网络场景下逐台添加。
+
+## 24. 统一连接入口（v0.14.0）
+
+- 入口合并：顶部 `+ 连接设备` 打开 `ConnectDialog`（720px），内含三个标签：同一网络（发现列表 + 一键接入）、主节点网络（复用 `HubPanel` A/B 卡）、手动直连（连接码 + 打开手动表单）。
+- 设置抽屉只保留「连接 / 通用」；原「跨网络」「发现」标签移除，设置连接页新增「连接设备」按钮。
+- 同一网络路径最短：`st.data.discovery.nodes` → `pairDiscovered(entry)` 一次调用完成接入；发现的 `agentAddress` 优先于 DSH 端口。
+- 状态：`st.connectTab`（默认 lan）、`openConnect(tab)` / `setConnectTab`；`modal.type='connect'` 与编辑弹窗共存。
+- 测试 64/64；截图 `connect-lan.png` / `connect-hub.png` / `connect-single.png`。
