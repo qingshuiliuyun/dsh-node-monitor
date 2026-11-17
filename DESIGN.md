@@ -293,7 +293,7 @@ owner（DSH Cookie） ──RPC──▶ 宿主
 ## 15. 界面重设计（v0.7.1）
 
 - 目标：把「所有配置摊在首页」改成「顶部工具条 + 设置抽屉」，降低首屏噪声，移动端优先。
-- 结构：`nm-head`（sticky/移动端 static）内放标题、`⟳`、`+ 添加节点`、`⚙ 设置`；`Overview` 只渲染告警、筛选/批量、节点卡、最近活动；`SettingsDrawer` 为右抽屉（移动端全屏），四 tab（连接/远程/发现/通用）。
+- 结构：`nm-head`（sticky/移动端 static）内放标题、`⟳`、`+ 连接设备`、`⚙ 设置`；`Overview` 只渲染告警、筛选/批量、节点卡、最近活动；`SettingsDrawer` 为右抽屉（移动端全屏），两 tab（连接/通用）。
 - 组件迁移：`SelfPanel`、`HubPanel`、`DiscoveryPanel` 从 Overview 移入抽屉；`SettingsModal` 保留，由「通用」打开；版本/升级在「连接」与「通用」两处可达。
 - 节点卡：`CardMetric` 三列网格（标签+数值+细进度条），移动端单列；`打开/内嵌/编辑` 在窄屏只保留「打开」与「⋯」。
 - 可访问性/降级：抽屉有 scrim 点击关闭与 ✕；设置入口用按钮不依赖 hover；无 JS 构建，仍为单文件 bundle。
@@ -479,7 +479,7 @@ owner（DSH Cookie） ──RPC──▶ 宿主
 ## 23. 「添加节点」与「跨网络」的边界（v0.13.2）
 
 - 两种入口语义不同：`添加节点` = 点对点 `nodes[]` 一台；`跨网络` = hub 关系或 hub 模式，PC 通过 `/hub/push` 投影出所有 peer。
-- UI：NodeModal 顶部新增 `.nm-scope-note`（虚线框 + 说明 + 「打开跨网络设置」按钮，调用 `closeModal(); openSettings('remote')`）；HubPanel B 卡说明“连接后自动出现该主节点下的所有电脑，不用逐台添加”。
+- UI：NodeModal 顶部新增 `.nm-scope-note`（虚线框 + 说明 + 「打开连接设备」按钮，调用 `closeModal(); openConnect('hub')`）；HubPanel B 卡说明“连接后自动出现该主节点下的所有电脑，不用逐台添加”。
 - 目的：消除“跨网络不就是添加节点吗”的误解，减少用户在主节点网络场景下逐台添加。
 
 ## 24. 统一连接入口（v0.14.0）
@@ -489,3 +489,13 @@ owner（DSH Cookie） ──RPC──▶ 宿主
 - 同一网络路径最短：`st.data.discovery.nodes` → `pairDiscovered(entry)` 一次调用完成接入；发现的 `agentAddress` 优先于 DSH 端口。
 - 状态：`st.connectTab`（默认 lan）、`openConnect(tab)` / `setConnectTab`；`modal.type='connect'` 与编辑弹窗共存。
 - 测试 64/64；截图 `connect-lan.png` / `connect-hub.png` / `connect-single.png`。
+
+## 25. 术语与入口一致性审核（v0.14.1）
+
+- 删除「跨网络 / 发现」两个设置标签后，审计客户端全部文案与按钮调用：
+  - `modal.scopeHint/scopeAction`、`hub.title/hub.tokenPlaceholder`、`node.hubTag`、`open.hubHint`、`empty.add`、`open.needLogin`、`self.hint`、`invite.hint` 统一指向「连接设备」的三个标签；
+  - 手动表单的「打开连接设备」改为 `closeModal(); openConnect('hub')`，不再打开已删除的抽屉 tab；
+  - 「同一网络」按 host 匹配现有节点，已接入的条目显示「已接入」，避免重复添加；
+  - 设置抽屉「连接设备」按钮先关抽屉再开弹窗，避免两层遮罩叠加。
+- 文档：README 术语表、§3 步骤、连接码/桥接/连接细节、界面说明、截图列表；INSTALL 步骤 3；DESIGN 结构段（两 tab）。
+- 验证脚本 `audit.js`：面板文本「跨网络」计数 0；「打开连接设备」后 active tab 为「主节点网络」；移动端 390×844 弹窗三标签可用；0 console error。
