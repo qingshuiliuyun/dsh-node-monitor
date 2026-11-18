@@ -1,54 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {
-  AGENT_STATUS_PATH,
-  restrictSnapshot,
-  BATCH_OPS,
-  DISCOVERY_PROTOCOL,
-  DISCOVERY_TTL_MS,
-  PROTOCOL,
-  adaptAgentStatus,
-  adaptGenericStatus,
-  appendEvent,
-  buildAnnouncement,
-  clampSettings,
-  classifyProbe,
-  compareTokens,
-  tokenEquals,
-  computeAlerts,
-  discoveryAddress,
-  emptySnapshot,
-  encodeJoinLink,
-  encodeNodeLink,
-  parseNodeLink,
-  parseJoinLink,
-  formatMetrics,
-  fromPersistedState,
-  generateAgentToken,
-  generatePairingToken,
-  jsonSafe,
-  maskLogin, rebaseLoginUrl,
-  mergeDiscovery,
-  normalizeBaseUrl,
-  parseAnnouncement,
-  parseLoginUrl,
-  probeEndpoint,
-  probeRecordFromOutcome,
-  probeTarget,
-  sanitizeSessionList,
-  sanitizeSnapshot,
-  shortNodeId,
-  summarize,
-  toPersistedState,
-  validateBatchRequest,
-  validateHubRelay,
-  sanitizeHubPeers,
-  validateControlRequest,
-  validateNodeInput,
-  compareVersions,
-  pickLatestTag,
-  cleanVersion
-} from '../lib/core.js'
+import { AGENT_STATUS_PATH, restrictSnapshot, BATCH_OPS, DISCOVERY_PROTOCOL, DISCOVERY_TTL_MS, PROTOCOL, adaptAgentStatus, adaptGenericStatus, appendEvent, buildAnnouncement, clampSettings, classifyProbe, compareTokens, tokenEquals, computeAlerts, discoveryAddress, emptySnapshot, encodeJoinLink, encodeNodeLink, parseNodeLink, parseJoinLink, formatMetrics, fromPersistedState, generateAgentToken, generatePairingToken, jsonSafe, maskLogin, rebaseLoginUrl, mergeDiscovery, normalizeBaseUrl, parseAnnouncement, parseLoginUrl, probeEndpoint, probeRecordFromOutcome, probeTarget, sanitizeSessionList, sanitizeSnapshot, shortNodeId, summarize, toPersistedState, validateBatchRequest, validateHubRelay, sanitizeHubPeers, validateControlRequest, validateNodeInput, compareVersions, pickLatestTag, cleanVersion, validatePairRequest } from '../lib/core.js'
 
 const node = (overrides = {}) => ({
   id: 'n1',
@@ -678,4 +630,19 @@ test('登录地址重写：把回环主机换成节点主机，保留端口与 t
     rebaseLoginUrl('http://10.1.1.5:3081/?token=abc', 'http://192.168.1.9:45873'),
     'http://10.1.1.5:3081/?token=abc'
   )
+})
+
+test('配对请求：接受账号指纹/证明/时间戳字段', () => {
+  const result = validatePairRequest({
+    port: 3081,
+    token: 'abcd-efgh-ijkl',
+    id: 'n-1234',
+    ah: 'a1b2c3d4',
+    proof: 'f'.repeat(64),
+    ts: 1730000000000
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.value.accountHash, 'a1b2c3d4')
+  assert.equal(result.value.proof, 'f'.repeat(64))
+  assert.equal(result.value.ts, 1730000000000)
 })

@@ -286,6 +286,18 @@ UDP discovery: 45871, multicast `239.255.43.21`, every 30s, 5-minute TTL; fields
 | [docs/screenshots/](docs/screenshots) | UI screenshots (v0.6.x) |
 | [market/PUBLISH.md](market/PUBLISH.md) | Marketplace submission notes |
 
+## Three connection tiers (v0.17.0)
+
+| Scenario | How to connect | What you get |
+| --- | --- | --- |
+| Same LAN + same DSH account | Auto-discovery and auto-pair, **no token to paste** | Full monitoring, control, one-click open/embed (tag "Same account") |
+| Different networks | Paste the peer URL + connection token (or connect code / join a hub) | Monitoring and control; opening the chat gets a one-time authenticated DSH URL via the token, no launch link to paste |
+| Same LAN + different accounts | Auto-pair is read-only; paste the peer connection token to upgrade | Monitoring; control/open after pasting the token |
+
+- Account match uses only the first 32 chars of `sha256(account id)` and an HMAC proof with a one-minute window; no account id or name is sent. Disable with `DSH_NODE_MONITOR_TRUST_SAME_ACCOUNT=0`.
+- Opening a chat calls `GET /node-monitor/api/v1/login` with the full connection token and returns a one-time authenticated URL (60s, never logged).
+- One device joins one hub; multi-level hub cascading is not implemented yet.
+
 ## Screenshots
 
 | Overview | Multiple nodes |

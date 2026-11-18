@@ -5,11 +5,12 @@ process.env.DSH_NODE_MONITOR_AUTO_PAIR = '0'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
+import { EventEmitter } from 'node:events'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { NodeMonitorHost, apply } from '../lib/index.js'
-import { AGENT_HEALTH_PATH, AGENT_STATUS_PATH, BRIDGE_PUSH_PATH, BRIDGE_RELAY_PATH, CONTROL_PATH, DIAGNOSE_PATH, HUB_PUSH_PATH, HUB_RESULT_PATH, HUB_RELAY_PATH, OPEN_PATH, PAIR_PATH, PROTOCOL, RPC_CHANNEL, buildAnnouncement, HUB_QUERY_PATH } from '../lib/core.js'
+import { AGENT_HEALTH_PATH, AGENT_STATUS_PATH, BRIDGE_PUSH_PATH, BRIDGE_RELAY_PATH, CONTROL_PATH, DIAGNOSE_PATH, LOGIN_PATH, HUB_PUSH_PATH, HUB_RESULT_PATH, HUB_RELAY_PATH, OPEN_PATH, PAIR_PATH, PROTOCOL, RPC_CHANNEL, buildAnnouncement, HUB_QUERY_PATH } from '../lib/core.js'
 import { parseNodeLink, buildConnectCode, shortNodeId } from '../lib/core.js'
 
 const owner = { principal: { kind: 'owner' } }
@@ -37,6 +38,7 @@ function fakeContext(origin, options = {}) {
           }
         }
         if (name === 'pluginManager') return options.pluginManager
+        if (name === 'deepseekAccount') return options.accountService
         if (name === 'webServer') return ctx.webServer
         if (name === 'connection') return ctx.connection
         return undefined
@@ -58,6 +60,9 @@ function fakeContext(origin, options = {}) {
         return () => {}
       },
       connection: {
+        authenticatedUrl(url) {
+          return `${url}/?token=test-launch`
+        },
         rpc: {
           handle(channel, handler) {
             rpc.set(channel, handler)
@@ -104,6 +109,19 @@ function mockRes() {
       return body
     }
   }
+}
+
+function mockJsonReq(body) {
+  const req = new EventEmitter()
+  req.method = 'POST'
+  req.socket = { remoteAddress: '192.168.1.8' }
+  req.headers = { 'content-type': 'application/json' }
+  req.destroy = () => {}
+  process.nextTick(() => {
+    req.emit('data', Buffer.from(JSON.stringify(body)))
+    req.emit('end')
+  })
+  return req
 }
 
 function mockReq(token, method = 'GET', extra = {}) {
@@ -280,7 +298,7 @@ test('宿主：agent 端点鉴权、健康检查与快照契约', async () => {
     await diagnose(mockReq(host.secrets.agentToken), diag)
     assert.equal(diag.statusCode, 200)
     const info = diag.json()
-    assert.equal(info.version, '0.16.0')
+    assert.equal(info.version, '0.17.0')
     assert.equal(typeof info.memory.heapUsed, 'number')
     assert.equal(typeof info.uptimeSec, 'number')
     assert.equal(info.nodes, 1)
@@ -1332,7 +1350,7 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
   const calls = []
   const pluginManager = {
     async listBundles() {
-      return [{ name: 'dsh-node-monitor', version: '0.16.0', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
+      return [{ name: 'dsh-node-monitor', version: '0.17.0', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
     },
     async installBundle(spec) {
       calls.push(spec)
@@ -1347,19 +1365,19 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
     await delay(50)
     globalThis.fetch = async (url) => {
       assert.ok(String(url).includes('/tags'))
-      return { ok: true, json: async () => [{ name: 'v0.16.1' }, { name: 'v0.9.8' }, { name: 'v0.16.0' }] }
+      return { ok: true, json: async () => [{ name: 'v0.17.1' }, { name: 'v0.9.8' }, { name: 'v0.17.0' }] }
     }
     const info = await rpc.get(RPC_CHANNEL)('upgradeCheck', {}, undefined, owner)
     assert.equal(info.ok, true)
-    assert.equal(info.value.latest, '0.16.1')
+    assert.equal(info.value.latest, '0.17.1')
     assert.equal(info.value.updateAvailable, true)
-    assert.equal(info.value.current, '0.16.0')
+    assert.equal(info.value.current, '0.17.0')
     assert.equal(info.value.install.linked, false)
 
-    const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.16.1' }, undefined, owner)
+    const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.17.1' }, undefined, owner)
     assert.equal(applied.ok, true)
-    assert.equal(applied.value.target, '0.16.1')
-    assert.ok(calls[0].includes('refs/tags/v0.16.1'))
+    assert.equal(applied.value.target, '0.17.1')
+    assert.ok(calls[0].includes('refs/tags/v0.17.1'))
 
     const stale = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.6.8' }, undefined, owner)
     assert.equal(stale.ok, false)
@@ -1747,5 +1765,103 @@ test('主节点查询接口：按短 ID 返回在线对端，令牌错误 401', 
     host.dispose()
     for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
     await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+  }
+})
+
+
+test('登录端点：完整连接令牌可换取 DSH 登录地址，只读令牌被拒绝', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-host-'))
+  const { ctx, routes } = fakeContext('http://127.0.0.1:3999')
+  const host = new NodeMonitorHost(ctx, { home })
+  try {
+    await host.start()
+    const okRes = mockRes()
+    await routes.get(LOGIN_PATH)(mockReq(host.secrets.agentToken, 'GET', { host: '192.168.1.5:45873' }), okRes)
+    assert.equal(okRes.statusCode, 200)
+    assert.match(okRes.json().url, /^http:\/\/192\.168\.1\.5:3999\/\?token=/)
+    const deniedRes = mockRes()
+    await routes.get(LOGIN_PATH)(mockReq(host.secrets.statusToken, 'GET'), deniedRes)
+    assert.equal(deniedRes.statusCode, 401)
+  } finally {
+    await host.dispose()
+  }
+})
+
+test('同账号配对：有效 proof 返回完整令牌并标记 trusted，错误 proof 仍只读', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-host-'))
+  const { ctx, routes } = fakeContext('http://127.0.0.1:3999')
+  const host = new NodeMonitorHost(ctx, { home })
+  try {
+    await host.start()
+    host.autoPair = true
+    host.accountCache = { id: 'account-1', hash: 'hash-1', at: Date.now() }
+    const ts = Date.now()
+    const body = {
+      id: 'peer-11111111',
+      label: 'Same Account Peer',
+      port: 3999,
+      agentPort: 45873,
+      token: 'status-token-value',
+      auto: true,
+      ah: 'hash-1',
+      proof: host.accountProof('peer-11111111', ts),
+      ts
+    }
+    const res = mockRes()
+    await routes.get(PAIR_PATH)(mockJsonReq(body), res)
+    assert.equal(res.statusCode, 200)
+    const payload = res.json()
+    assert.equal(payload.trusted, true)
+    assert.equal(payload.token, host.secrets.agentToken)
+
+    const badRes = mockRes()
+    await routes.get(PAIR_PATH)(mockJsonReq({ ...body, id: 'peer-22222222', proof: 'deadbeef' }), badRes)
+    assert.equal(badRes.statusCode, 200)
+    assert.equal(badRes.json().token, host.secrets.statusToken)
+    assert.equal(badRes.json().trusted, false)
+  } finally {
+    await host.dispose()
+  }
+})
+
+test('打开票据：无登录材料时用连接令牌向对端换取登录地址', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-host-'))
+  const peer = http.createServer((req, res) => {
+    if (req.url === LOGIN_PATH) {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ ok: true, url: 'http://peer:3999/?token=peer-launch' }))
+      return
+    }
+    res.writeHead(404)
+    res.end()
+  })
+  await new Promise((resolve) => peer.listen(0, '127.0.0.1', resolve))
+  const port = peer.address().port
+  const { ctx, rpc } = fakeContext('http://127.0.0.1:3999')
+  const host = new NodeMonitorHost(ctx, { home })
+  try {
+    await host.start()
+    const now = new Date().toISOString()
+    const node = {
+      id: 'n-peer', name: 'peer', baseUrl: `http://127.0.0.1:${port}`, adapter: 'dsh',
+      path: null, tags: [], enabled: true, network: 'lan', notes: '', createdAt: now, updatedAt: now
+    }
+    host.nodes.push(node)
+    host.secrets.nodeTokens[node.id] = 'peer-token'
+    const ticket = await host.openTicket({ id: node.id })
+    assert.equal(ticket.hasLogin, true)
+    const url = new URL(ticket.url, 'http://127.0.0.1:3999')
+    const res = {
+      statusCode: 0,
+      headers: {},
+      writeHead(status, extra) { this.statusCode = status; Object.assign(this.headers, extra || {}); return this },
+      end(chunk) { this.body = String(chunk ?? '') }
+    }
+    host.handleOpenRequest({ method: 'GET', url: url.pathname + url.search }, res)
+    assert.equal(res.statusCode, 302)
+    assert.equal(res.headers.location, 'http://peer:3999/?token=peer-launch')
+  } finally {
+    peer.close()
+    await host.dispose()
   }
 })

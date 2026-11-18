@@ -516,3 +516,12 @@ owner（DSH Cookie） ──RPC──▶ 宿主
 - 身份：`buildAgentPayload()` 增加 `identity {nodeId,label}`，`sanitizeSnapshot` 保留白名单字段；`runProbe` 成功后写入 `node.remoteId`；`mergeDuplicateNodes()` 按 `remoteId` 合并重复节点（优先保留 self，其次先创建者），迁移 `secrets.nodeTokens`、合并 enabled，写 state 与 `event.nodeMerged`。
 - 语义：不同端口=不同 DSH 进程=不同节点（正确）；同一进程多地址=重复，应合并。
 - 测试：host 新增「同一 DSH 实例经不同地址添加时按 identity 合并」；66/66。截图 `docs/screenshots/topology-drag.png`。
+
+## 28. 三层连接策略与登录换取（v0.17.0）
+
+- 账号指纹：`refreshAccountHash()` 通过 `ctx.get('deepseekAccount').getProfile({version,locale,timezoneOffsetSeconds})` 取 `profile.id`，生成 `sha256("dsh-node-monitor-account:"+id)` 前 32 位；缓存 10 分钟，未登录返回空串。指纹只进配对/发现报文，不进 state。
+- 同账号证明：请求方计算 `HMAC(账号ID, "pair:"+nodeId+":"+minute)`，配对报文带 `ah`、`proof`、`ts`；接收方要求 `ah` 与自己指纹一致、`ts` 在 ±2 分钟、`proof` 匹配当前或相邻分钟，且同一 `nodeId:minute` 未用过；通过则回 `token=agentToken`、`trusted=true`，否则仍回 `statusToken`。
+- 登录换取：`GET /node-monitor/api/v1/login`（完整 agentToken）用 `connection.authenticatedUrl(webBase)` 生成带启动令牌的 URL；`webBase` 优先 `secrets.publicUrl`，否则用请求 Host 的主机名 + 本机 web 端口。`openTicket` 在无已存登录链接时调用对端 login，把 URL 放进 60 秒 `openTargets`，`/node-monitor/open` 302 到它；启动令牌不写日志、不落盘。
+- 客户端：`trusted` 标签「同账号」；trusted 的自动配对节点解除「自动节点隐藏打开」限制。
+- 安全边界：指纹不可作为凭证（仅匹配信号）；proof 泄露仅在 2 分钟窗口内可用且同分钟同节点只能成功一次；完整令牌、加入令牌、登录 URL 均属敏感信息。
+- 测试：core 配对字段；host 登录端点 200/401、同账号可信/不可信配对、openTicket 换取登录地址并 302；70/70。
