@@ -509,3 +509,10 @@ owner（DSH Cookie） ──RPC──▶ 宿主
   - `hubJoin`/`hubInfo` 随之返回新地址，加入链接与二维码同步变化。
 - 客户端：检测 `127.0.0.1/localhost/10./192.168./172.16-31.` 时显示警告与输入框；保存后刷新 `hubInfo/hubToken` 并 toast。
 - 测试：host 新增保存/清除/非法/无权 4 组断言；65/65。截图 `docs/screenshots/public-address.png`。
+
+## 27. 拓扑拖动与节点身份（v0.16.0）
+
+- 拖动：`Topology` 用 `useState(overrides)` 保存用户拖拽坐标，`at(id)` 取显示位置；节点 `onPointerDown/Move/Up` 用 `ownerSVGElement.getBoundingClientRect()` 计算 viewBox 坐标偏移，限制在 70..W-70 / 44..H-44；移动 <3px 视为点击（打开详情），拖动后显示「重置布局」。
+- 身份：`buildAgentPayload()` 增加 `identity {nodeId,label}`，`sanitizeSnapshot` 保留白名单字段；`runProbe` 成功后写入 `node.remoteId`；`mergeDuplicateNodes()` 按 `remoteId` 合并重复节点（优先保留 self，其次先创建者），迁移 `secrets.nodeTokens`、合并 enabled，写 state 与 `event.nodeMerged`。
+- 语义：不同端口=不同 DSH 进程=不同节点（正确）；同一进程多地址=重复，应合并。
+- 测试：host 新增「同一 DSH 实例经不同地址添加时按 identity 合并」；66/66。截图 `docs/screenshots/topology-drag.png`。

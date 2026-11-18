@@ -20,6 +20,14 @@ Packages: `dsh-node-monitor-dist/dsh-node-monitor-0.7.3.zip` / `.tgz`, or GitHub
 
 ## Connection topology (v0.13.0)
 
+### Drag and node identity (v0.16.0)
+
+- Drag any node with the mouse; edges follow live, and a **Reset layout** button appears after dragging. Clicking still opens details.
+- Two DSH instances on different ports are separate processes and are shown as separate nodes.
+- The same instance added via both `127.0.0.1` and a LAN IP / connect code is merged automatically using the agent's `identity.nodeId`, keeping one node and moving the token over.
+
+
+
 The monitor tab starts with a live topology map: the hub (or this machine) in the center, every connected DSH around it. Solid lines are hub links, dashed lines are direct LAN links; dot colours follow node status, and clicking a node opens its detail page. The layout adapts to the node count, and on mobile the map scrolls horizontally with the hub centred.
 
 ## Features

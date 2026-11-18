@@ -280,7 +280,7 @@ test('宿主：agent 端点鉴权、健康检查与快照契约', async () => {
     await diagnose(mockReq(host.secrets.agentToken), diag)
     assert.equal(diag.statusCode, 200)
     const info = diag.json()
-    assert.equal(info.version, '0.15.0')
+    assert.equal(info.version, '0.16.0')
     assert.equal(typeof info.memory.heapUsed, 'number')
     assert.equal(typeof info.uptimeSec, 'number')
     assert.equal(info.nodes, 1)
@@ -643,6 +643,51 @@ test('控制面：restart 未确认/未允许都不执行，允许后返回 202'
   // 不放行真正的 process.exit：只校验通过校验器，不触发 202 分支
   host.disposed = true
   await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+})
+
+
+test('宿主：同一 DSH 实例经不同地址添加时按 identity 合并', async () => {
+  const http = await import('node:http')
+  const token = 'same-agent-token'
+  const server = http.createServer((req, res) => {
+    if (req.url !== AGENT_STATUS_PATH) {
+      res.writeHead(404, { 'content-type': 'application/json' })
+      res.end('{"ok":false}')
+      return
+    }
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({
+      protocol: PROTOCOL,
+      generatedAt: new Date().toISOString(),
+      identity: { nodeId: 'same-dsh-node-1', label: '同一实例' },
+      host: { hostname: 'same-host', platform: 'linux', arch: 'x64', uptimeSec: 60 },
+      sessions: { total: 1, running: 0, idle: 1 },
+      metrics: { cpuPct: 5, memPct: 10, diskFreePct: 50, load1: 0 },
+      alerts: [],
+      recent: []
+    }))
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const { port } = server.address()
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'nm-identity-'))
+  const { ctx, rpc, cleanups } = fakeContext('http://127.0.0.1:3995')
+  const host = new NodeMonitorHost(ctx, { home })
+  try {
+    await host.start()
+    const call = (endpoint, payload = {}) => rpc.get(RPC_CHANNEL)(endpoint, payload, undefined, owner)
+    const first = await call('addNode', { name: 'A', baseUrl: `http://127.0.0.1:${port}`, adapter: 'dsh', token })
+    assert.equal(first.value.nodes.length, 2)
+    const second = await call('addNode', { name: 'B', baseUrl: `http://localhost:${port}`, adapter: 'dsh', token })
+    assert.equal(second.value.nodes.length, 2)
+    const kept = host.nodes.find((node) => !(node.tags || []).includes('self'))
+    assert.equal(kept.remoteId, 'same-dsh-node-1')
+    assert.equal(host.nodes.length, second.value.nodes.length)
+  } finally {
+    await host.dispose()
+    server.close()
+    for (const cleanup of cleanups) await Promise.resolve(cleanup()).catch(() => {})
+    await fsp.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+  }
 })
 
 test('宿主：批量探测/启用/停用与权限、空选与上限拒绝', async () => {
@@ -1287,7 +1332,7 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
   const calls = []
   const pluginManager = {
     async listBundles() {
-      return [{ name: 'dsh-node-monitor', version: '0.15.0', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
+      return [{ name: 'dsh-node-monitor', version: '0.16.0', source: 'https://codeload.github.com/qingshuiliuyun/dsh-node-monitor/tar.gz/refs/tags/v0.6.8', installed: true, enabled: true }]
     },
     async installBundle(spec) {
       calls.push(spec)
@@ -1302,19 +1347,19 @@ test('自查更新：读取 GitHub tags、比较版本，并调用插件管理�
     await delay(50)
     globalThis.fetch = async (url) => {
       assert.ok(String(url).includes('/tags'))
-      return { ok: true, json: async () => [{ name: 'v0.15.1' }, { name: 'v0.9.8' }, { name: 'v0.15.0' }] }
+      return { ok: true, json: async () => [{ name: 'v0.16.1' }, { name: 'v0.9.8' }, { name: 'v0.16.0' }] }
     }
     const info = await rpc.get(RPC_CHANNEL)('upgradeCheck', {}, undefined, owner)
     assert.equal(info.ok, true)
-    assert.equal(info.value.latest, '0.15.1')
+    assert.equal(info.value.latest, '0.16.1')
     assert.equal(info.value.updateAvailable, true)
-    assert.equal(info.value.current, '0.15.0')
+    assert.equal(info.value.current, '0.16.0')
     assert.equal(info.value.install.linked, false)
 
-    const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.15.1' }, undefined, owner)
+    const applied = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.16.1' }, undefined, owner)
     assert.equal(applied.ok, true)
-    assert.equal(applied.value.target, '0.15.1')
-    assert.ok(calls[0].includes('refs/tags/v0.15.1'))
+    assert.equal(applied.value.target, '0.16.1')
+    assert.ok(calls[0].includes('refs/tags/v0.16.1'))
 
     const stale = await rpc.get(RPC_CHANNEL)('upgradeApply', { version: '0.6.8' }, undefined, owner)
     assert.equal(stale.ok, false)
