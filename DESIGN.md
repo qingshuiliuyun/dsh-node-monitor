@@ -525,3 +525,103 @@ owner（DSH Cookie） ──RPC──▶ 宿主
 - 客户端：`trusted` 标签「同账号」；trusted 的自动配对节点解除「自动节点隐藏打开」限制。
 - 安全边界：指纹不可作为凭证（仅匹配信号）；proof 泄露仅在 2 分钟窗口内可用且同分钟同节点只能成功一次；完整令牌、加入令牌、登录 URL 均属敏感信息。
 - 测试：core 配对字段；host 登录端点 200/401、同账号可信/不可信配对、openTicket 换取登录地址并 302；70/70。
+
+## 29. 多级级联与集群任务网格（设计草案，未实现）
+
+### 29.1 目标与非目标
+
+目标：
+
+- Hub 可以再接 Hub，形成「根 Hub → 区域 Hub → 子 Hub → PC」的树，任意一级都能看到自己子树内的全部 DSH。
+- 把一个作业（Job）拆成多个分片（Shard），按规则分配给子树内不同 DSH 执行，状态可追踪、失败可重试，最后按策略合并结果。
+- 沿用现有安全模型：每级只信任上一级下发的令牌；动作、HTTP 路由、审计与限流一致。
+
+非目标：
+
+- 不做跨组织的公网开放注册；级联关系必须由管理员手工建立（子 Hub 填父 Hub 地址 + 加入令牌）。
+- 不替代 DSH 自身的对话/会话系统；任务执行只通过受控执行器，不在 Hub 侧拼装或伪造 Agent 内部状态。
+
+### 29.2 拓扑与寻址
+
+```text
+根 Hub (root)
+├─ 区域 Hub A (region-a)
+│  ├─ PC-1 (pc-1)
+│  └─ 子 Hub A1 (region-a/hub-a1)
+│     └─ PC-2 (pc-2)
+└─ 区域 Hub B (region-b)
+   └─ PC-3 (pc-3)
+```
+
+- 每个节点有稳定 `nodePath`：从根开始的 `hubId/nodeId` 链，例如 `root/region-a/pc-1`；PC 只知道自己直属 Hub 的 path，父 Hub 负责前缀拼接。
+- `nodeKey` 仍用现有 `nodeId`（短 ID）做用户可见标识；`nodePath` 仅用于路由，避免展示过长。
+- 每个 Hub 维护：
+  - `parentLink {url, token, path}`（为空表示根）；
+  - `childHubs {hubId → {url, token, lastSeen, path, nodeCount}}`；
+  - `subtreeNodes`（由子 Hub push 汇总而来，只存元数据：path、name、status、metrics、runtime，不含对端令牌/登录材料）。
+- 环路防护：注册时父 Hub 校验 `path` 不以自己为前缀、深度 ≤ 8；`hubId` 全局唯一。
+
+### 29.3 级联协议
+
+1. 注册：子 Hub → 父 Hub `POST /node-monitor/api/v1/cluster/register`，Bearer 父 Hub「加入令牌」，body `{hubId, name, publicUrl, version, capacity}`；父 Hub 记录 childHub，返回 `{clusterPath, token}`（token 仅供该子 Hub 后续 push/forward 使用，可轮换）。
+2. 汇总上报：沿用 `/hub/push`，body 增 `role: 'hub'`、`path`、`nodes: [{path,nodeId,name,online,runtime,metrics}]`；父 Hub 不再逐台探测子 Hub 下的节点，直接采用上报值（`adapter='cluster'`）。
+3. 命令转发：父 Hub `POST /cluster/forward` → 子 Hub，body `{commandId, targetPath, action, params, dryRun, deadline}`；
+   - 子 Hub 若 `targetPath` 等于自己 → 本地执行；
+   - 若目标在自己子树 → 继续向下转发；
+   - 否则回 `not-found`；
+   - 结果沿原路回传，每跳写审计，`commandId` 去重，TTL 默认 45s。
+4. 查询/连接码：`/cluster/query?shortId=` 沿树向下查；命中路径回传，不返回地址与令牌。
+5. 离线传播：子 Hub 每 5s 上报一次；父 Hub 15s 未收到则标记子树 `stale`，子树节点统一转「离线（经 Hub）」；恢复后自动回在线。
+
+### 29.4 任务网格（Job / Shard / Result）
+
+```json
+{
+  "jobId": "job-...",
+  "name": "分析 3 个仓库的依赖",
+  "shards": [
+    {"shardId": "s1", "target": {"path": "root/region-a/pc-1"}, "payload": {"kind": "shell", "command": "..."}},
+    {"shardId": "s2", "target": {"tags": ["office"]}, "payload": {"kind": "manual", "instruction": "..."}}
+  ],
+  "merge": {"mode": "concat"},
+  "policy": {"timeoutSec": 600, "retries": 1, "concurrency": 4}
+}
+```
+
+- 分配策略：`explicit`（指定 path）→ `labels`（按节点标签/名称过滤）→ `balanced`（按在线节点数均分）。单 Job 分片上限 64。
+- 执行器（节点侧，插件内）：
+  - `manual`：任务写入节点面板「集群任务」，由本地用户/Agent 执行后点完成并填结果；默认，最安全。
+  - `shell`：按白名单命令模板执行（如 `bash -lc`），输出截断 256KB，超时 kill；默认关闭，需节点显式开启。
+  - `agent`（后续）：调用本机 DSH 的 Agent 会话接口提交提示词并收集回答；需要 DSH 提供稳定的公共 API，当前未确认，暂不实现。
+- 结果回传：节点 → 直属 Hub `POST /cluster/shard/result`，`{jobId, shardId, status, output, error, durationMs}`；Hub 按 `shardId` 幂等写入。
+- 合并：`concat`（按 shard 顺序拼接）、`jsonMerge`（浅合并）、`reduce`（在 Hub 本机跑白名单 reduce 命令）、`summarize`（可选：Hub 自身 Agent 汇总，需人工确认并计费）。
+- 持久化：Hub 侧 `cluster-jobs.json`（0600，原子写），Job 保留最近 100 个；结果超限截断并标记 `truncated`。
+
+### 29.5 安全与配额
+
+- 每级只接受上一级签发的集群令牌；`/cluster/*` 全部要求 Bearer + 同源检查 + `content-type: application/json`。
+- 动作白名单：转发只允许 `probe / plugins.list / plugins.setEnabled / shell(需开启) / job.*`；`restart` 仍默认关闭。
+- 审计：每跳写 `audit.jsonl`（commandId、来源 path、目标 path、动作、结果、耗时）；保留 30 天。
+- 配额：子树节点 ≤ 256、子 Hub ≤ 16、Job 分片 ≤ 64、单结果 ≤ 256KB、转发深度 ≤ 8。
+- 不把令牌、登录材料、会话正文写进上报/日志；任务输出按敏感数据处理。
+
+### 29.6 UI
+
+- 拓扑图：按 `nodePath` 分层显示 Hub 层级；不同层用「区域 / 部门」标签，点击节点仍进详情。
+- 「集群任务」页：Job 列表、分片矩阵（节点 × 状态）、重试/取消、结果预览与合并结果下载。
+- 节点详情：显示所属 `nodePath`、上游 Hub、任务历史。
+
+### 29.7 实施计划
+
+| 版本 | 内容 | 验收 |
+| --- | --- | --- |
+| v0.18.0 | 级联 MVP：register/push 扩展、path 前缀、子树聚合、查询/控制转发、树状拓扑 | 两级 Hub + 3 节点，根 Hub 能看到孙节点并转发探测 |
+| v0.19.0 | 任务网格 MVP：manual 执行器、Job/Shard 模型、状态与 concat 合并、集群任务页 | 3 节点各执行一个 manual 分片并合并展示 |
+| v0.19.x | shell 执行器（白名单、超时、截断）、重试/取消、审计 | 失败重试与超时验证 |
+| v0.20.0 | agent 执行器（取决于 DSH 公共会话 API）、summarize 合并 | 端到端提示词分发与结果汇总 |
+
+### 29.8 待确认
+
+- 任务执行方式优先级：`manual`（稳）→ `shell`（强但需白名单）→ `agent`（最理想，需 DSH 提供稳定 API）。
+- 合并是否需要 LLM 总结（会产生模型调用与费用），默认只用纯文本/JSON 合并。
+- 级联层级与令牌轮换策略（每级独立令牌 vs 继承父令牌）。
